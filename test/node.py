@@ -1,0 +1,415 @@
+import json
+import hashlib
+import socket
+import threading
+import time
+import random
+import math
+import os
+from typing import List, Dict, Any, Optional
+from xmlrpc.server import SimpleXMLRPCServer
+import xmlrpc.client
+
+# Set a global socket timeout to prevent RPC client calls from hanging indefinitely
+socket.setdefaulttimeout(3.0)
+
+def in_half_open_range(val: int, start: int, end: int) -> bool:
+    """Checks if val is in (start, end] on the circular ring."""
+    if start == end:
+        return True
+    if start < end:
+        return start < val <= end
+    else:
+        return val > start or val <= end
+
+def in_open_range(val: int, start: int, end: int) -> bool:
+    """Checks if val is in (start, end) on the circular ring."""
+    if start == end:
+        return val != start
+    if start < end:
+        return start < val < end
+    else:
+        return val > start or val < end
+
+class ChordNode:
+    """A node in the Chord distributed hash table."""
+
+    def __init__(self, ip: str, port: int, m: int = 160):
+        self.ip = ip
+        self.port = port
+        self.address = f"{ip}:{port}"
+        self.m = m
+        self.node_id = self.get_hash(self.address)
+        
+        self.successor = self.address
+        self.predecessor = None
+        self.finger_table = [self.address] * self.m
+        self.storage = {}  # Maps str(cluster_id) -> List of course JSON strings
+        
+        self.shutdown_event = threading.Event()
+        self.server = None
+        self.server_thread = None
+        self.worker_thread = None
+
+        # Load balancing metrics
+        self.query_load = 0
+        self.LOAD_THRESHOLD = 3
+
+        # Load global centroid table
+        self.k = 0
+        self.n_features = 0
+        self.vocabulary = {}
+        self.centroids = []
+        self._load_centroids()
+
+    def _load_centroids(self):
+        path = os.path.join(os.path.dirname(__file__), "synth_data", "centroids.json")
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                self.k = data["k"]
+                self.n_features = data["n_features"]
+                self.vocabulary = data["vocabulary"]
+                self.centroids = data["centroids"]
+
+    def get_cluster_hash(self, cluster_id: int) -> int:
+        """Maps a cluster ID linearly across the 0 to 2^m Chord ring to preserve locality."""
+        if self.k <= 0: return 0
+        chunk_size = (2 ** self.m) // self.k
+        return cluster_id * chunk_size
+
+    def _vectorize(self, text: str) -> List[float]:
+        """Converts text to an L2 normalized TF vector."""
+        tokens = text.lower().split()
+        
+        vec = [0.0] * self.n_features
+        for token in tokens:
+            if token in self.vocabulary:
+                idx = self.vocabulary[token]
+                vec[idx] += 1.0
+                
+        # L2 Normalize
+        norm = math.sqrt(sum(v*v for v in vec))
+        if norm > 0:
+            vec = [v/norm for v in vec]
+        return vec
+
+    def _vectorize_and_find_centroids(self, text: str, nprobe: int = 1) -> List[int]:
+        """Converts text to vector, calculates distance, returns top `nprobe` cluster IDs."""
+        vec = self._vectorize(text)
+            
+        distances = []
+        for c_id, centroid in enumerate(self.centroids):
+            dist = math.sqrt(sum((v - c)**2 for v, c in zip(vec, centroid)))
+            distances.append((dist, c_id))
+            
+        distances.sort(key=lambda x: x[0])
+        return [c_id for dist, c_id in distances[:nprobe]]
+
+    @property
+    def successor_id(self) -> int:
+        return self.get_hash(self.successor)
+
+    def get_hash(self, addr: str) -> int:
+        """Determines the SHA-1 hash of an address."""
+        if not addr:
+            return 0
+        return int(hashlib.sha1(addr.encode('utf-8')).hexdigest(), 16)
+
+    def _get_rpc_client(self, addr: str) -> xmlrpc.client.ServerProxy:
+        return xmlrpc.client.ServerProxy(f"http://{addr}", allow_none=True)
+
+    # --- XML-RPC Exposed Methods ---
+
+    def ping(self) -> bool:
+        return True
+
+    def get_successor(self) -> str:
+        return self.successor
+
+    def get_predecessor(self) -> Optional[str]:
+        return self.predecessor
+
+    def find_successor(self, id_str: str) -> str:
+        id_val = int(id_str)
+        if in_half_open_range(id_val, self.node_id, self.successor_id):
+            return self.successor
+        else:
+            n0_addr = self.closest_preceding_node(id_val)
+            if n0_addr == self.address:
+                return self.successor
+            try:
+                with self._get_rpc_client(n0_addr) as n0:
+                    return n0.find_successor(str(id_val))
+            except Exception:
+                return self.successor
+
+    def closest_preceding_node(self, id_val: int) -> str:
+        for i in range(self.m - 1, -1, -1):
+            finger_addr = self.finger_table[i]
+            if finger_addr:
+                finger_id = self.get_hash(finger_addr)
+                if in_open_range(finger_id, self.node_id, id_val):
+                    return finger_addr
+        return self.address
+
+    def notify(self, potential_predecessor: str):
+        p_id = self.get_hash(potential_predecessor)
+        if self.predecessor is None or self.predecessor == self.address:
+            self.predecessor = potential_predecessor
+        else:
+            pred_id = self.get_hash(self.predecessor)
+            if in_open_range(p_id, pred_id, self.node_id):
+                self.predecessor = potential_predecessor
+
+    def store_replica(self, cluster_id: int, value: str) -> bool:
+        """Locally stores a replica course value under its cluster_id."""
+        cid_str = str(cluster_id)
+        if cid_str not in self.storage:
+            self.storage[cid_str] = []
+        
+        try:
+            new_course = json.loads(value)
+            new_id = new_course.get("course_id")
+            self.storage[cid_str] = [
+                c for c in self.storage[cid_str] 
+                if json.loads(c).get("course_id") != new_id
+            ]
+        except Exception:
+            pass
+
+        self.storage[cid_str].append(value)
+        return True
+
+    def store_local(self, cluster_id: int, value: str) -> bool:
+        """Locally stores a course value and forwards a replica to its successor."""
+        success = self.store_replica(cluster_id, value)
+        if success and self.successor != self.address:
+            try:
+                with self._get_rpc_client(self.successor) as succ:
+                    succ.store_replica(cluster_id, value)
+            except Exception as e:
+                print(f"[{self.address}] Failed to replicate cluster {cluster_id} to {self.successor}: {e}")
+        return success
+
+    def retrieve_local(self, cluster_id: int, is_replica_request: bool = False) -> List[str]:
+        """Locally retrieves the list of course values for a cluster_id."""
+        # 1. Load Balancing Delegation (Active Replica)
+        if not is_replica_request and self.query_load >= self.LOAD_THRESHOLD and self.successor != self.address:
+            print(f"[{self.address}] ⚠️ OVERLOADED! (Load: {self.query_load}). Delegating read query to Replica at {self.successor}...")
+            try:
+                with self._get_rpc_client(self.successor) as succ:
+                    return succ.retrieve_local(cluster_id, True)
+            except Exception as e:
+                print(f"[{self.address}] ❌ Failed to delegate to replica: {e}")
+                # Fallback to serving locally if delegation fails
+                pass
+                
+        # 2. Serve Locally
+        self.query_load += 1
+        return self.storage.get(str(cluster_id), [])
+
+    def get_info(self) -> Dict[str, Any]:
+        """Returns metadata about the node's status on the ring."""
+        primary_summary = {}
+        replica_summary = {}
+        
+        pred_id = self.get_hash(self.predecessor) if self.predecessor else self.node_id
+        
+        for cid_str, courses in self.storage.items():
+            cluster_id = int(cid_str)
+            cat_hash = self.get_cluster_hash(cluster_id)
+            if in_half_open_range(cat_hash, pred_id, self.node_id):
+                primary_summary[cid_str] = len(courses)
+            else:
+                replica_summary[cid_str] = len(courses)
+
+        return {
+            "address": self.address,
+            "node_id": str(self.node_id),
+            "successor": self.successor,
+            "predecessor": self.predecessor,
+            "primary_summary": primary_summary,
+            "replica_summary": replica_summary
+        }
+
+    # --- Client / Node API ---
+
+    def join(self, bootstrap_addr: Optional[str]) -> bool:
+        if bootstrap_addr:
+            try:
+                with self._get_rpc_client(bootstrap_addr) as bootstrap:
+                    self.successor = bootstrap.find_successor(str(self.node_id))
+                self.finger_table[0] = self.successor
+                return True
+            except Exception as e:
+                print(f"[{self.address}] Failed to join ring via {bootstrap_addr}: {e}")
+                return False
+        else:
+            self.successor = self.address
+            self.finger_table[0] = self.address
+            self.predecessor = None
+            return True
+
+    def put_course(self, course_json: str) -> bool:
+        """Calculates cluster and routes to the responsible node in the DHT."""
+        course = json.loads(course_json)
+        text = f"{course['course_title']} {course['category']} {course['description']}"
+        
+        # Pre-compute and embed the vector during insertion to save CPU at query time!
+        course["vector"] = self._vectorize(text)
+        course_json_with_vec = json.dumps(course)
+        
+        top_clusters = self._vectorize_and_find_centroids(text, nprobe=1)
+        cluster_id = top_clusters[0]
+        
+        cluster_hash = self.get_cluster_hash(cluster_id)
+        target_node = self.find_successor(str(cluster_hash))
+        
+        if target_node == self.address:
+            return self.store_local(cluster_id, course_json_with_vec)
+        else:
+            try:
+                with self._get_rpc_client(target_node) as client:
+                    return client.store_local(cluster_id, course_json_with_vec)
+            except Exception as e:
+                print(f"[{self.address}] Failed to route PUT for cluster {cluster_id} to {target_node}: {e}")
+                return False
+
+    def get_similar_courses(self, course_json: str, nprobe: int = 1) -> List[str]:
+        """Finds top `nprobe` clusters, routes GETs, and returns Top-5 courses using Cosine Similarity."""
+        course = json.loads(course_json)
+        text = f"{course['course_title']} {course['category']} {course['description']}"
+        
+        print(f"[{self.address}] Received similarity query. Running internal vectorization...")
+        query_vec = self._vectorize(text)
+        top_clusters = self._vectorize_and_find_centroids(text, nprobe=nprobe)
+        print(f"[{self.address}] Target semantic clusters found: {top_clusters} (nprobe={nprobe})")
+        
+        results = []
+        # Distributed fanout
+        for cluster_id in top_clusters:
+            cluster_hash = self.get_cluster_hash(cluster_id)
+            target_node = self.find_successor(str(cluster_hash))
+            
+            if target_node == self.address:
+                print(f" └──> [{self.address}] Serving cluster {cluster_id} from local disk.")
+                results.extend(self.retrieve_local(cluster_id))
+            else:
+                print(f" └──> [{self.address}] Routing network request for cluster {cluster_id} to {target_node}...")
+                try:
+                    with self._get_rpc_client(target_node) as client:
+                        results.extend(client.retrieve_local(cluster_id))
+                except Exception as e:
+                    print(f"[{self.address}] Failed to fetch cluster {cluster_id} from {target_node}: {e}")
+        
+        # Deduplicate
+        unique_results = list(set(results))
+        
+        # Rank by Cosine Similarity
+        ranked_results = []
+        for course_str in unique_results:
+            c = json.loads(course_str)
+            # Use the pre-computed vector! Zero overhead!
+            c_vec = c.get("vector", self._vectorize(f"{c['course_title']} {c['category']} {c['description']}"))
+            
+            # Dot product of two L2 normalized vectors is exactly Cosine Similarity!
+            sim = sum(v1 * v2 for v1, v2 in zip(query_vec, c_vec))
+            
+            # Remove the vector before returning so we don't spam the user's terminal with numbers
+            if "vector" in c:
+                del c["vector"]
+            
+            ranked_results.append((sim, json.dumps(c)))
+            
+        # Sort descending by similarity
+        ranked_results.sort(key=lambda x: x[0], reverse=True)
+        
+        # Return top 5
+        return [c_str for sim, c_str in ranked_results[:5]]
+
+    # --- Background Stabilization Protocols ---
+
+    def stabilize(self):
+        if self.successor == self.address:
+            if self.predecessor and self.predecessor != self.address:
+                self.successor = self.predecessor
+                self.finger_table[0] = self.successor
+            return
+
+        try:
+            with self._get_rpc_client(self.successor) as succ:
+                x = succ.get_predecessor()
+                if x:
+                    x_id = self.get_hash(x)
+                    if in_open_range(x_id, self.node_id, self.successor_id):
+                        self.successor = x
+                        self.finger_table[0] = self.successor
+                succ.notify(self.address)
+        except Exception:
+            found_alive = False
+            for i in range(1, self.m):
+                finger = self.finger_table[i]
+                if finger and finger != self.address and finger != self.successor:
+                    try:
+                        with self._get_rpc_client(finger) as client:
+                            client.ping()
+                            self.successor = finger
+                            self.finger_table[0] = self.successor
+                            print(f"[{self.address}] Successor failed. Replaced with alive finger {finger}")
+                            found_alive = True
+                            break
+                    except Exception:
+                        pass
+            if not found_alive:
+                self.successor = self.address
+                self.finger_table[0] = self.successor
+
+    def fix_fingers(self):
+        i = random.randint(0, self.m - 1)
+        target_id = (self.node_id + (2 ** i)) % (2 ** self.m)
+        try:
+            self.finger_table[i] = self.find_successor(str(target_id))
+        except Exception:
+            pass
+
+    def check_predecessor(self):
+        if self.predecessor and self.predecessor != self.address:
+            try:
+                with self._get_rpc_client(self.predecessor) as pred:
+                    pred.ping()
+            except Exception:
+                self.predecessor = None
+
+    # --- Lifecycle Control ---
+
+    def start(self):
+        self.server = SimpleXMLRPCServer((self.ip, self.port), logRequests=False, allow_none=True)
+        self.server.register_instance(self)
+        
+        self.server_thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.server_thread.start()
+        
+        def periodic_worker():
+            while not self.shutdown_event.is_set():
+                try:
+                    self.stabilize()
+                    self.fix_fingers()
+                    self.check_predecessor()
+                    # Cool down CPU load
+                    if self.query_load > 0:
+                        self.query_load -= 1
+                except Exception:
+                    pass
+                time.sleep(0.5)
+                
+        self.worker_thread = threading.Thread(target=periodic_worker, daemon=True)
+        self.worker_thread.start()
+        print(f"Node started on {self.address} (ID: {self.node_id})")
+
+    def stop(self):
+        self.shutdown_event.set()
+        if self.server:
+            self.server.shutdown()
+            self.server.server_close()
+        print(f"Node stopped on {self.address}")
