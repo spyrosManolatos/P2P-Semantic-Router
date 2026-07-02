@@ -4,6 +4,7 @@ import argparse
 from typing import List, Dict, Any
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
+from scipy.cluster.hierarchy import linkage, leaves_list
 
 def main():
     parser = argparse.ArgumentParser(description="Train KMeans centroids on synthetic course data using TF-IDF.")
@@ -41,10 +42,23 @@ def main():
     print(f"Running K-Means clustering to find {args.k} global centroids...")
     kmeans = KMeans(n_clusters=args.k, random_state=42, n_init=10)
     kmeans.fit(X)
+    
+    raw_centroids = kmeans.cluster_centers_
+    raw_labels = kmeans.labels_
 
-    # 5. Extract results
-    labels = kmeans.labels_
-    centroids = kmeans.cluster_centers_
+    # 4.5 Agglomerative 1D Ordering (Dendrogram Hierarchy)
+    # We build a hierarchical tree of the 5 centroids and flatten it to get a 1D left-to-right order.
+    # This guarantees that adjacent Cluster IDs (0, 1, 2...) are semantically similar!
+    print("Running Agglomerative Clustering on centroids to establish 1D Semantic Ring Mapping...")
+    Z = linkage(raw_centroids, method='average', metric='euclidean')
+    ordered_indices = leaves_list(Z)
+    
+    # Re-order the centroids
+    centroids = raw_centroids[ordered_indices]
+    
+    # Create a mapping from old K-Means label to new Dendrogram label
+    label_map = {old_idx: new_idx for new_idx, old_idx in enumerate(ordered_indices)}
+    labels = [label_map[l] for l in raw_labels]
 
     # Create a mapping of cluster_id -> list of courses that fall into it
     cluster_map = {i: [] for i in range(args.k)}
