@@ -16,7 +16,7 @@ Unlike traditional categorical DHTs that rely on random SHA-1 hashing, this arch
 
 ## 🚀 Setup Instructions
 
-This project requires a standard Python environment with `scikit-learn` installed (used exclusively for the offline Machine Learning training pipeline). 
+This project requires a standard Python environment. 
 
 ### 1. Create a Virtual Environment (Recommended)
 ```bash
@@ -26,7 +26,7 @@ source .venv/bin/activate
 
 ### 2. Install Dependencies
 ```bash
-pip install scikit-learn
+pip install -r requirements.txt
 ```
 
 ---
@@ -55,6 +55,11 @@ Proves the hot-spot load balancer. Blasts a specific cluster with rapid-fire que
 python test/simulations/03_load_balancing.py
 ```
 
+**Simulation 4: Node Join**
+Proves the self-healing and load balancing of a new node joining an existing network.
+```bash
+python test/simulations/04_node_join.py
+```
 ---
 
 ## 🧠 ML Training Pipeline

@@ -209,6 +209,46 @@ class ChordNode:
         self.query_load += 1
         return self.storage.get(str(cluster_id), [])
 
+    def claim_and_migrate_data(self, new_node_id_str: str, new_node_address: str) -> Dict[str, List[str]]:
+        """
+        Called by a joining node on its successor.
+        Identifies and returns all cluster data that the new node is responsible for (both primary and replica),
+        and removes replica data that this node should no longer keep.
+        """
+        new_node_id = int(new_node_id_str)
+        pred_addr = self.predecessor if self.predecessor else self.address
+        pred_id = self.get_hash(pred_addr)
+        self_id = self.node_id
+        
+        migrated_data = {}
+        keys_to_delete = []
+        
+        for cid_str, courses in list(self.storage.items()):
+            cluster_id = int(cid_str)
+            cluster_hash = self.get_cluster_hash(cluster_id)
+            
+            # Case 1: The cluster belongs to the joining node's primary range
+            if in_half_open_range(cluster_hash, pred_id, new_node_id):
+                migrated_data[cid_str] = courses
+                # Keep it locally as a replica (since we are the successor of the new node)
+            
+            # Case 2: The cluster belongs to the successor's remaining primary range
+            elif in_half_open_range(cluster_hash, new_node_id, self_id):
+                # Keep it locally as primary, do not migrate
+                pass
+                
+            # Case 3: The cluster is replica data that the new node should now replicate instead of us
+            else:
+                migrated_data[cid_str] = courses
+                keys_to_delete.append(cid_str)
+                
+        for k in keys_to_delete:
+            del self.storage[k]
+            
+        print(f"[{self.address}] Migrated clusters to new node {new_node_address}. Deleted local replicas for: {keys_to_delete}")
+        return migrated_data
+
+
     def get_info(self) -> Dict[str, Any]:
         """Returns metadata about the node's status on the ring."""
         primary_summary = {}
@@ -241,6 +281,19 @@ class ChordNode:
                 with self._get_rpc_client(bootstrap_addr) as bootstrap:
                     self.successor = bootstrap.find_successor(str(self.node_id))
                 self.finger_table[0] = self.successor
+                
+                # Request data migration from successor on join
+                if self.successor != self.address:
+                    print(f"[{self.address}] Requesting data migration from successor {self.successor}...")
+                    try:
+                        with self._get_rpc_client(self.successor) as succ:
+                            migrated_data = succ.claim_and_migrate_data(str(self.node_id), self.address)
+                            for cid_str, courses in migrated_data.items():
+                                self.storage[cid_str] = courses
+                        print(f"[{self.address}] Data migration complete. Received {len(migrated_data)} clusters.")
+                    except Exception as e:
+                        print(f"[{self.address}] Warning: Data migration failed: {e}")
+                        
                 return True
             except Exception as e:
                 print(f"[{self.address}] Failed to join ring via {bootstrap_addr}: {e}")
