@@ -16,8 +16,15 @@ def main():
     
     inject_courses(nodes, courses)
     
+    print_separator()
+    print("Old Chord Ring Topology (Before Failure):")
+    print_separator()
+    for node in nodes:
+        info = node.get_info()
+        print(f"Address: {info['address']} -> Successor: {info['successor']}")
+        
     print_storage_summary(nodes, title="Storage Summary BEFORE Failure")
-    
+        
     query_course = random.choice(courses)
     query_json = json.dumps(query_course)
     
@@ -43,7 +50,22 @@ def main():
             info = node.get_info()
             print(f"Address: {info['address']} -> Successor: {info['successor']}")
 
-        print_storage_summary(nodes, title="Storage Summary AFTER Failure (Replicas Upgraded to Primary!)")
+        print_storage_summary(nodes, title="Storage Summary AFTER Failure (Replicas Upgraded and Healed!)")
+
+        # Verify replication factor recovery
+        all_primaries = set()
+        all_replicas = set()
+        for node in nodes:
+            info = node.get_info()
+            all_primaries.update(info['primary_summary'].keys())
+            all_replicas.update(info['replica_summary'].keys())
+            
+        print("\nReplication Recovery Validation:")
+        print(f"  Primary clusters in network: {sorted(list(all_primaries))}")
+        print(f"  Replica clusters in network: {sorted(list(all_replicas))}")
+        
+        expected_clusters = {str(i) for i in range(5)}
+        replication_healed = (all_primaries == expected_clusters and all_replicas == expected_clusters)
 
         query_node = random.choice(nodes)
         print(f"\nAttempting to retrieve similar courses for '{query_course['course_title']}' from surviving node {query_node.address}...")
@@ -53,10 +75,10 @@ def main():
         duration = (time.time() - start_time) * 1000
         
         print(f"Query returned {len(recovered_list)} courses in {duration:.1f}ms.")
-        if recovered_list:
-            print("=> SUCCESS: Data was successfully retrieved from the new Primary!")
+        if recovered_list and replication_healed:
+            print("=> SUCCESS: Data was successfully retrieved and replication factor (R=1) was fully healed!")
         else:
-            print("=> FAILURE: Data was lost.")
+            print(f"=> FAILURE: Data retrieval or replica healing failed. (Data found: {bool(recovered_list)}, Replication healed: {replication_healed})")
 
     teardown_network(nodes)
 

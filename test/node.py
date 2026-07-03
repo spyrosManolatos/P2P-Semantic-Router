@@ -155,12 +155,18 @@ class ChordNode:
 
     def notify(self, potential_predecessor: str):
         p_id = self.get_hash(potential_predecessor)
+        predecessor_changed = False
         if self.predecessor is None or self.predecessor == self.address:
             self.predecessor = potential_predecessor
+            predecessor_changed = True
         else:
             pred_id = self.get_hash(self.predecessor)
             if in_open_range(p_id, pred_id, self.node_id):
                 self.predecessor = potential_predecessor
+                predecessor_changed = True
+                
+        if predecessor_changed:
+            self.sync_replicas_to_successor()
 
     def store_replica(self, cluster_id: int, value: str) -> bool:
         """Locally stores a replica course value under its cluster_id."""
@@ -247,6 +253,32 @@ class ChordNode:
             
         print(f"[{self.address}] Migrated clusters to new node {new_node_address}. Deleted local replicas for: {keys_to_delete}")
         return migrated_data
+
+    def sync_replicas_to_successor(self):
+        """Pushes all primary data from this node to its successor as replicas."""
+        if self.successor == self.address:
+            return
+            
+        print(f"[{self.address}] Successor is {self.successor}. Syncing replicas...")
+        
+        # Identify what we are Primary for (using predecessor)
+        pred_addr = self.predecessor if self.predecessor else self.address
+        pred_id = self.get_hash(pred_addr)
+        
+        try:
+            with self._get_rpc_client(self.successor) as succ:
+                for cid_str, courses in list(self.storage.items()):
+                    cluster_id = int(cid_str)
+                    cat_hash = self.get_cluster_hash(cluster_id)
+                    
+                    # If we are the primary holder of this cluster:
+                    if in_half_open_range(cat_hash, pred_id, self.node_id):
+                        for course_str in courses:
+                            succ.store_replica(cluster_id, course_str)
+                print(f"[{self.address}] Replica syncing to successor {self.successor} complete.")
+        except Exception as e:
+            print(f"[{self.address}] Failed to sync replicas to successor {self.successor}: {e}")
+
 
 
     def get_info(self) -> Dict[str, Any]:
@@ -388,6 +420,7 @@ class ChordNode:
             if self.predecessor and self.predecessor != self.address:
                 self.successor = self.predecessor
                 self.finger_table[0] = self.successor
+                self.sync_replicas_to_successor()
             return
 
         try:
@@ -398,6 +431,7 @@ class ChordNode:
                     if in_open_range(x_id, self.node_id, self.successor_id):
                         self.successor = x
                         self.finger_table[0] = self.successor
+                        self.sync_replicas_to_successor()
                 succ.notify(self.address)
         except Exception:
             found_alive = False
@@ -411,12 +445,15 @@ class ChordNode:
                             self.finger_table[0] = self.successor
                             print(f"[{self.address}] Successor failed. Replaced with alive finger {finger}")
                             found_alive = True
+                            self.sync_replicas_to_successor()
                             break
                     except Exception:
                         pass
             if not found_alive:
-                self.successor = self.address
-                self.finger_table[0] = self.successor
+                if self.successor != self.address:
+                    self.successor = self.address
+                    self.finger_table[0] = self.successor
+                    self.sync_replicas_to_successor()
 
     def fix_fingers(self):
         i = random.randint(0, self.m - 1)
