@@ -8,9 +8,10 @@ class ConfigLoader:
     @classmethod
     def get_config(cls):
         if cls._config is None:
-            # Locate config.yaml in the same directory as this script (src/)
+            # Locate config.yaml in the project root (one level up from src/)
             current_dir = os.path.dirname(os.path.abspath(__file__))
-            config_path = os.path.join(current_dir, "config.yaml")
+            project_root = os.path.dirname(current_dir)
+            config_path = os.path.join(project_root, "config.yaml")
             
             if not os.path.exists(config_path):
                 raise FileNotFoundError(f"Configuration file missing: {config_path}")
@@ -20,10 +21,10 @@ class ConfigLoader:
                 
             # Automatically resolve paths so that scripts can be executed from anywhere
             cls._config['storage']['centroids_path'] = os.path.abspath(
-                os.path.join(current_dir, cls._config['storage']['centroids_path'])
+                os.path.join(project_root, cls._config['storage']['centroids_path'])
             )
             cls._config['storage']['data_path'] = os.path.abspath(
-                os.path.join(current_dir, cls._config['storage']['data_path'])
+                os.path.join(project_root, cls._config['storage']['data_path'])
             )
             
         return cls._config

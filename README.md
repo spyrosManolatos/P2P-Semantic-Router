@@ -26,15 +26,15 @@ source .venv/bin/activate
 
 ### 2. Install Dependencies
 ```bash
-pip install -r src/requirements.txt
+pip install -r requirements.txt
 ```
 
 ### 3. Configuration
 The system parameters are fully decoupled from the code. You must create a local configuration file before running anything:
 ```bash
-cp src/config.yaml.example src/config.yaml
+cp config.yaml.example config.yaml
 ```
-*(You can open `src/config.yaml` to modify the number of nodes, replication factor (RF), ports, and dataset paths).*
+*(You can open `config.yaml` to modify the number of nodes, replication factor (RF), ports, and dataset paths).*
 
 ---
 
@@ -58,7 +58,7 @@ python3 src/semantic/ml_models/train_centroids.py
 
 ## 🧪 Running the Simulations
 
-To mathematically prove the architecture, the project includes isolated simulation scripts. These scripts will read `src/config.yaml`, spin up a local P2P network (e.g., 10 nodes), inject the dataset, execute tests, and gracefully shut down.
+To mathematically prove the architecture, the project includes isolated simulation scripts. These scripts will read `config.yaml`, spin up a local P2P network (e.g., 10 nodes), inject the dataset, execute tests, and gracefully shut down.
 
 Run these commands from the root directory:
 

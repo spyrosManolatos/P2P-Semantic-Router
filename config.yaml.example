@@ -13,8 +13,8 @@ dht:
   stabilize_interval_sec: 0.5
 
 storage:
-  centroids_path: "semantic/ml_models/storage/centroids.json"
-  data_path: "../data/storage/data.json"
+  centroids_path: "src/semantic/ml_models/storage/centroids.json"
+  data_path: "data/storage/data.json"
   load_threshold: 3
 
 kmeans:
