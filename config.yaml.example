@@ -1,0 +1,21 @@
+# P2P Semantic Router Configuration (Example)
+# Copy this file to 'config.yaml' and customize for your local environment.
+
+network:
+  default_host: "127.0.0.1"
+  default_port: 8001
+  timeout_sec: 3.0
+  number_of_nodes: 10
+
+dht:
+  hash_bits_m: 160
+  replication_factor: 3
+  stabilize_interval_sec: 0.5
+
+storage:
+  centroids_path: "src/semantic/ml_models/storage/centroids.json"
+  data_path: "data/storage/data.json"
+  load_threshold: 3
+
+kmeans:
+  clusters: 5
