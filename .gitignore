@@ -1,3 +1,6 @@
 .venv
 *.pyc
 */__pycache__
+src/config.yaml
+data/storage/data.json
+src/semantic/ml_models/storage

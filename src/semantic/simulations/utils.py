@@ -4,9 +4,10 @@ import json
 import time
 import random
 
-# Add the parent directory to sys.path so we can import ChordNode
+# Add the parent directory to sys.path so we can import ChordNode and config_loader
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from node import ChordNode
+import config_loader
 
 def print_separator():
     print("=" * 70)
@@ -34,32 +35,43 @@ def print_storage_summary(nodes, title="Distributed Storage Summary (Semantic Cl
         print("-" * 40)
 
 def load_courses():
-    synth_data_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "synth_data", "data.json")
+    config = config_loader.load_config()
+    synth_data_path = config['storage']['data_path']
     with open(synth_data_path, "r", encoding="utf-8") as f:
         courses = json.load(f)
     print(f"Loaded {len(courses)} courses from {synth_data_path}")
     return courses
 
-def setup_network(num_nodes=4, base_port=8001):
+def setup_network(num_nodes=None, base_port=None, r=None):
+    config = config_loader.load_config()
+    num_nodes = num_nodes if num_nodes is not None else config['network']['number_of_nodes']
+    base_port = base_port if base_port is not None else config['network']['default_port']
+    r = r if r is not None else config['dht']['replication_factor']
+    
     print_separator()
-    print(f"Starting Semantic DHT Peer Simulation with {num_nodes} Nodes...")
+    print(f"Starting Semantic DHT Peer Simulation with {num_nodes} Nodes (RF={r})...")
     print_separator()
 
-    base_ip = "127.0.0.1"
+    base_ip = config['network']['default_host']
     nodes = []
 
-    for i in range(num_nodes):
+    # 1. Spawn and start the Bootstrap Node
+    bootstrap_node = ChordNode(base_ip, base_port, r=r)
+    bootstrap_node.start()
+    print("Forming Chord Ring with Bootstrap Node...")
+    bootstrap_node.join(None)
+    nodes.append(bootstrap_node)
+    
+    bootstrap_addr = bootstrap_node.address
+
+    # 2. Spawn and join the remaining nodes one by one
+    for i in range(1, num_nodes):
+        time.sleep(0.5)
+        # Notice we do NOT pass 'r' here. The node must learn it via join()
         node = ChordNode(base_ip, base_port + i)
         node.start()
-        nodes.append(node)
-    
-    print("\nNodes initialized. Forming Chord Ring...")
-    nodes[0].join(None)
-    
-    bootstrap_addr = nodes[0].address
-    for node in nodes[1:]:
-        time.sleep(0.5)
         node.join(bootstrap_addr)
+        nodes.append(node)
 
     print("\nWaiting for Chord ring stabilization (5 seconds)...")
     time.sleep(5.0)

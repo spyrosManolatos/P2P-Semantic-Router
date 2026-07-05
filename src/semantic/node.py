@@ -9,6 +9,11 @@ import os
 from typing import List, Dict, Any, Optional
 from xmlrpc.server import SimpleXMLRPCServer
 import xmlrpc.client
+import sys
+
+# Ensure src/ is in the python path to import config_loader
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import config_loader
 
 # Set a global socket timeout to prevent RPC client calls from hanging indefinitely
 socket.setdefaulttimeout(3.0)
@@ -34,14 +39,18 @@ def in_open_range(val: int, start: int, end: int) -> bool:
 class ChordNode:
     """A node in the Chord distributed hash table."""
 
-    def __init__(self, ip: str, port: int, m: int = 160):
+    def __init__(self, ip: str, port: int, m: int = None, r: int = None):
+        self.config = config_loader.load_config()
+        
         self.ip = ip
         self.port = port
         self.address = f"{ip}:{port}"
-        self.m = m
+        
+        self.m = m if m is not None else self.config['dht']['hash_bits_m']
+        self.r = r if r is not None else self.config['dht']['replication_factor']
         self.node_id = self.get_hash(self.address)
         
-        self.successor = self.address
+        self.successors = [self.address]
         self.predecessor = None
         self.finger_table = [self.address] * self.m
         self.storage = {}  # Maps str(cluster_id) -> List of course JSON strings
@@ -53,7 +62,7 @@ class ChordNode:
 
         # Load balancing metrics
         self.query_load = 0
-        self.LOAD_THRESHOLD = 3
+        self.LOAD_THRESHOLD = self.config['storage']['load_threshold']
 
         # Load global centroid table
         self.k = 0
@@ -63,7 +72,7 @@ class ChordNode:
         self._load_centroids()
 
     def _load_centroids(self):
-        path = os.path.join(os.path.dirname(__file__), "synth_data", "centroids.json")
+        path = self.config['storage']['centroids_path']
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -107,6 +116,10 @@ class ChordNode:
         return [c_id for dist, c_id in distances[:nprobe]]
 
     @property
+    def successor(self) -> str:
+        return self.successors[0] if self.successors else self.address
+
+    @property
     def successor_id(self) -> int:
         return self.get_hash(self.successor)
 
@@ -123,6 +136,12 @@ class ChordNode:
 
     def ping(self) -> bool:
         return True
+
+    def get_replication_factor(self) -> int:
+        return self.r
+
+    def get_successor_list(self) -> List[str]:
+        return self.successors
 
     def get_successor(self) -> str:
         return self.successor
@@ -166,7 +185,7 @@ class ChordNode:
                 predecessor_changed = True
                 
         if predecessor_changed:
-            self.sync_replicas_to_successor()
+            self.sync_replicas_to_successors()
 
     def store_replica(self, cluster_id: int, value: str) -> bool:
         """Locally stores a replica course value under its cluster_id."""
@@ -254,30 +273,30 @@ class ChordNode:
         print(f"[{self.address}] Migrated clusters to new node {new_node_address}. Deleted local replicas for: {keys_to_delete}")
         return migrated_data
 
-    def sync_replicas_to_successor(self):
-        """Pushes all primary data from this node to its successor as replicas."""
+    def sync_replicas_to_successors(self):
+        """Pushes all primary data from this node to its successor list as replicas."""
         if self.successor == self.address:
             return
             
-        print(f"[{self.address}] Successor is {self.successor}. Syncing replicas...")
-        
         # Identify what we are Primary for (using predecessor)
         pred_addr = self.predecessor if self.predecessor else self.address
         pred_id = self.get_hash(pred_addr)
         
-        try:
-            with self._get_rpc_client(self.successor) as succ:
-                for cid_str, courses in list(self.storage.items()):
-                    cluster_id = int(cid_str)
-                    cat_hash = self.get_cluster_hash(cluster_id)
-                    
-                    # If we are the primary holder of this cluster:
-                    if in_half_open_range(cat_hash, pred_id, self.node_id):
-                        for course_str in courses:
-                            succ.store_replica(cluster_id, course_str)
-                print(f"[{self.address}] Replica syncing to successor {self.successor} complete.")
-        except Exception as e:
-            print(f"[{self.address}] Failed to sync replicas to successor {self.successor}: {e}")
+        for succ in self.successors:
+            if succ == self.address:
+                continue
+            try:
+                with self._get_rpc_client(succ) as succ_client:
+                    for cid_str, courses in list(self.storage.items()):
+                        cluster_id = int(cid_str)
+                        cat_hash = self.get_cluster_hash(cluster_id)
+                        
+                        # If we are the primary holder of this cluster:
+                        if in_half_open_range(cat_hash, pred_id, self.node_id):
+                            for course_str in courses:
+                                succ_client.store_replica(cluster_id, course_str)
+            except Exception as e:
+                print(f"[{self.address}] Failed to sync replicas to {succ}: {e}")
 
 
 
@@ -311,8 +330,25 @@ class ChordNode:
         if bootstrap_addr:
             try:
                 with self._get_rpc_client(bootstrap_addr) as bootstrap:
-                    self.successor = bootstrap.find_successor(str(self.node_id))
-                self.finger_table[0] = self.successor
+                    try:
+                        self.r = bootstrap.get_replication_factor()
+                    except Exception:
+                        pass
+                    succ = bootstrap.find_successor(str(self.node_id))
+                
+                self.successors = [succ]
+                self.finger_table[0] = succ
+                
+                try:
+                    with self._get_rpc_client(succ) as s_client:
+                        s_list = s_client.get_successor_list()
+                        new_list = [succ]
+                        for n in s_list:
+                            if n not in new_list and n != self.address:
+                                new_list.append(n)
+                        self.successors = new_list[:self.r]
+                except Exception:
+                    pass
                 
                 # Request data migration from successor on join
                 if self.successor != self.address:
@@ -331,7 +367,7 @@ class ChordNode:
                 print(f"[{self.address}] Failed to join ring via {bootstrap_addr}: {e}")
                 return False
         else:
-            self.successor = self.address
+            self.successors = [self.address]
             self.finger_table[0] = self.address
             self.predecessor = None
             return True
@@ -418,42 +454,74 @@ class ChordNode:
     def stabilize(self):
         if self.successor == self.address:
             if self.predecessor and self.predecessor != self.address:
-                self.successor = self.predecessor
+                self.successors = [self.predecessor]
                 self.finger_table[0] = self.successor
-                self.sync_replicas_to_successor()
+                self.sync_replicas_to_successors()
             return
 
-        try:
-            with self._get_rpc_client(self.successor) as succ:
-                x = succ.get_predecessor()
-                if x:
-                    x_id = self.get_hash(x)
-                    if in_open_range(x_id, self.node_id, self.successor_id):
-                        self.successor = x
-                        self.finger_table[0] = self.successor
-                        self.sync_replicas_to_successor()
-                succ.notify(self.address)
-        except Exception:
+        alive_successor = None
+        for succ in list(self.successors):
+            try:
+                with self._get_rpc_client(succ) as client:
+                    client.ping()
+                    alive_successor = succ
+                    break
+            except Exception:
+                print(f"[{self.address}] Successor {succ} failed. Removing from list.")
+                if succ in self.successors:
+                    self.successors.remove(succ)
+                
+        if not alive_successor:
             found_alive = False
             for i in range(1, self.m):
                 finger = self.finger_table[i]
-                if finger and finger != self.address and finger != self.successor:
+                if finger and finger != self.address:
                     try:
                         with self._get_rpc_client(finger) as client:
                             client.ping()
-                            self.successor = finger
-                            self.finger_table[0] = self.successor
-                            print(f"[{self.address}] Successor failed. Replaced with alive finger {finger}")
+                            self.successors = [finger]
+                            self.finger_table[0] = finger
                             found_alive = True
-                            self.sync_replicas_to_successor()
+                            print(f"[{self.address}] All successors failed. Found alive finger {finger}.")
                             break
                     except Exception:
                         pass
             if not found_alive:
-                if self.successor != self.address:
-                    self.successor = self.address
-                    self.finger_table[0] = self.successor
-                    self.sync_replicas_to_successor()
+                self.successors = [self.address]
+                self.finger_table[0] = self.address
+                
+            self.sync_replicas_to_successors()
+            return
+            
+        try:
+            with self._get_rpc_client(alive_successor) as succ_client:
+                x = succ_client.get_predecessor()
+                if x:
+                    x_id = self.get_hash(x)
+                    if in_open_range(x_id, self.node_id, self.get_hash(alive_successor)):
+                        if x not in self.successors:
+                            self.successors.insert(0, x)
+                        self.successors = self.successors[:self.r]
+                        alive_successor = x
+                
+                self.finger_table[0] = alive_successor
+                
+                try:
+                    s_list = succ_client.get_successor_list()
+                    new_list = [alive_successor]
+                    for n in s_list:
+                        if n not in new_list and n != self.address:
+                            new_list.append(n)
+                    self.successors = new_list[:self.r]
+                except Exception:
+                    pass
+                    
+                succ_client.notify(self.address)
+                
+        except Exception:
+            pass
+            
+        self.sync_replicas_to_successors()
 
     def fix_fingers(self):
         i = random.randint(0, self.m - 1)

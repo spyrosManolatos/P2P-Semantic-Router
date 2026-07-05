@@ -11,7 +11,7 @@ from utils import (
 )
 
 def main():
-    nodes = setup_network(num_nodes=4)
+    nodes = setup_network()
     courses = load_courses()
     
     # Prove the Ring Mapping

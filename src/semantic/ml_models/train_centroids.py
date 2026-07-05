@@ -5,13 +5,20 @@ from typing import List, Dict, Any
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans
 from scipy.cluster.hierarchy import linkage, leaves_list
+import sys
+
+# Ensure src/ is in the python path to import config_loader
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+import config_loader
 
 def main():
+    config = config_loader.load_config()
+    
     parser = argparse.ArgumentParser(description="Train KMeans centroids on synthetic course data using TF-IDF.")
-    parser.add_argument("--k", type=int, default=5, help="Number of clusters (centroids) to generate.")
+    parser.add_argument("--k", type=int, default=config['kmeans']['clusters'], help="Number of clusters (centroids) to generate.")
     args = parser.parse_args()
 
-    data_path = os.path.join(os.path.dirname(__file__), "data.json")
+    data_path = config['storage']['data_path']
     if not os.path.exists(data_path):
         print(f"Error: {data_path} not found. Please generate synthetic data first.")
         return
@@ -88,7 +95,8 @@ def main():
         "centroids": centroids.tolist()  # Convert numpy array to list for JSON serialization
     }
 
-    out_path = os.path.join(os.path.dirname(__file__), "centroids.json")
+    out_path = config['storage']['centroids_path']
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(out_data, f, indent=4)
     

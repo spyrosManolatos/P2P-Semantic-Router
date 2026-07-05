@@ -16,7 +16,7 @@ Unlike traditional categorical DHTs that rely on random SHA-1 hashing, this arch
 
 ## 🚀 Setup Instructions
 
-This project requires a standard Python environment. 
+This project requires a standard Python environment (Python 3.8+ recommended). 
 
 ### 1. Create a Virtual Environment (Recommended)
 ```bash
@@ -26,47 +26,62 @@ source .venv/bin/activate
 
 ### 2. Install Dependencies
 ```bash
-pip install -r requirements.txt
+pip install -r src/requirements.txt
+```
+
+### 3. Configuration
+The system parameters are fully decoupled from the code. You must create a local configuration file before running anything:
+```bash
+cp src/config.yaml.example src/config.yaml
+```
+*(You can open `src/config.yaml` to modify the number of nodes, replication factor (RF), ports, and dataset paths).*
+
+---
+
+## 🧠 Dataset Creation & ML Training Pipeline
+
+Before running any simulations, the nodes need mathematical centroids to perform semantic routing. 
+
+**Step 1: Generate the Raw Dataset**
+(If not already present in `data/storage/data.json`, generate the synthetic courses).
+```bash
+python3 data/generate_synthetic_data.py
+```
+
+**Step 2: Train the Semantic K-Means Centroids**
+This script parses the raw dataset, builds a TF-IDF vocabulary, and trains the semantic clusters (default K=5). The resulting `centroids.json` is saved in the semantic model storage so the DHT nodes can use it for $O(1)$ routing.
+```bash
+python3 src/semantic/ml_models/train_centroids.py
 ```
 
 ---
 
 ## 🧪 Running the Simulations
 
-To mathematically prove the architecture, the project includes three isolated simulation scripts. These scripts will automatically spin up a local 4-node network, inject 100 synthetic academic courses, execute the tests, and shut down.
+To mathematically prove the architecture, the project includes isolated simulation scripts. These scripts will read `src/config.yaml`, spin up a local P2P network (e.g., 10 nodes), inject the dataset, execute tests, and gracefully shut down.
 
 Run these commands from the root directory:
 
 **Simulation 1: Semantic Routing & KNN**
-Proves the non-random ring mapping and the $O(1)$ Cosine Similarity top-5 ranking.
+Proves the non-random ring mapping and the distributed Cosine Similarity top-5 ranking.
 ```bash
-python test/simulations/01_semantic_routing.py
+python3 src/semantic/simulations/01_semantic_routing.py
 ```
 
 **Simulation 2: Fault Tolerance**
-Proves standard DHT self-healing. Kills a node and verifies that the replica data is successfully promoted and served.
+Proves standard DHT self-healing. Kills a node abruptly and verifies that the successor recovers the ring.
 ```bash
-python test/simulations/02_node_failure.py
+python3 src/semantic/simulations/02_node_failure.py
 ```
 
 **Simulation 3: Active Replica CPU Delegation**
 Proves the hot-spot load balancer. Blasts a specific cluster with rapid-fire queries and verifies that the Primary node successfully delegates the traffic to its successor.
 ```bash
-python test/simulations/03_load_balancing.py
+python3 src/semantic/simulations/03_load_balancing.py
 ```
 
-**Simulation 4: Node Join**
-Proves the self-healing and load balancing of a new node joining an existing network.
+**Simulation 4: Dynamic Node Join & Replication**
+Proves the self-healing and data migration of a new node joining an existing network, correctly inheriting the network's Replication Factor (RF) via Bootstrap discovery.
 ```bash
-python test/simulations/04_node_join.py
-```
----
-
-## 🧠 ML Training Pipeline
-
-The global centroid tables (`centroids.json`) are pre-trained. If you modify the synthetic dataset in `test/synth_data/data.json`, you must recalculate the mathematical clusters before running the simulations.
-
-To retrain the clusters (Default $K=5$):
-```bash
-python test/synth_data/train_centroids.py
+python3 src/semantic/simulations/04_node_join.py
 ```
