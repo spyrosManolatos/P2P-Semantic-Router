@@ -3,4 +3,4 @@
 */__pycache__
 config.yaml
 data/storage/data.json
-src/semantic/ml_models/storage
+src/ml/storage
