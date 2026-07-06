@@ -47,7 +47,10 @@ class ChordNode:
         self.address = f"{ip}:{port}"
         
         self.m = m if m is not None else self.config['dht']['hash_bits_m']
-        self.r = r if r is not None else self.config['dht']['replication_factor']
+        self.rf = r if r is not None else self.config['dht']['replication_factor']
+        self.r = max(1, self.rf)
+        self.stabilize_interval = self.config['dht']['stabilize_interval_sec']
+        self.timeout = self.config['network']['timeout_sec']
         self.node_id = self.get_hash(self.address)
         
         self.successors = [self.address]
@@ -138,7 +141,7 @@ class ChordNode:
         return True
 
     def get_replication_factor(self) -> int:
-        return self.r
+        return self.rf
 
     def get_successor_list(self) -> List[str]:
         return self.successors
@@ -209,7 +212,7 @@ class ChordNode:
     def store_local(self, cluster_id: int, value: str) -> bool:
         """Locally stores a course value and forwards a replica to its successor."""
         success = self.store_replica(cluster_id, value)
-        if success and self.successor != self.address:
+        if self.rf > 0 and success and self.successor != self.address:
             try:
                 with self._get_rpc_client(self.successor) as succ:
                     succ.store_replica(cluster_id, value)
@@ -255,6 +258,8 @@ class ChordNode:
             # Case 1: The cluster belongs to the joining node's primary range
             if in_half_open_range(cluster_hash, pred_id, new_node_id):
                 migrated_data[cid_str] = courses
+                if self.r <= 1:
+                    keys_to_delete.append(cid_str)
                 # Keep it locally as a replica (since we are the successor of the new node)
             
             # Case 2: The cluster belongs to the successor's remaining primary range
@@ -275,14 +280,14 @@ class ChordNode:
 
     def sync_replicas_to_successors(self):
         """Pushes all primary data from this node to its successor list as replicas."""
-        if self.successor == self.address:
+        if self.rf <= 0 or self.successor == self.address:
             return
             
         # Identify what we are Primary for (using predecessor)
         pred_addr = self.predecessor if self.predecessor else self.address
         pred_id = self.get_hash(pred_addr)
         
-        for succ in self.successors:
+        for succ in self.successors[:self.rf]:
             if succ == self.address:
                 continue
             try:
@@ -440,6 +445,8 @@ class ChordNode:
             # Remove the vector before returning so we don't spam the user's terminal with numbers
             if "vector" in c:
                 del c["vector"]
+                
+            c["similarity"] = sim
             
             ranked_results.append((sim, json.dumps(c)))
             
@@ -520,8 +527,34 @@ class ChordNode:
                 
         except Exception:
             pass
-            
+        self.cleanup_stale_replicas()
         self.sync_replicas_to_successors()
+
+    def cleanup_stale_replicas(self):
+        depth = self.rf + 1
+        curr = self.predecessor
+        valid = True
+        for _ in range(depth - 1):
+            if curr and curr != self.address:
+                try:
+                    with self._get_rpc_client(curr) as client:
+                        curr = client.get_predecessor()
+                except:
+                    valid = False
+                    break
+            else:
+                valid = False
+                break
+        
+        if valid and curr:
+            limit_id = self.get_hash(curr)
+            keys_to_delete = []
+            for k_str in list(self.storage.keys()):
+                key_id = self.get_cluster_hash(int(k_str))
+                if not in_half_open_range(key_id, limit_id, self.node_id) and self.predecessor is not None:
+                    keys_to_delete.append(k_str)
+            for k in keys_to_delete:
+                del self.storage[k]
 
     def fix_fingers(self):
         i = random.randint(0, self.m - 1)
@@ -559,7 +592,7 @@ class ChordNode:
                         self.query_load -= 1
                 except Exception:
                     pass
-                time.sleep(0.5)
+                time.sleep(self.stabilize_interval)
                 
         self.worker_thread = threading.Thread(target=periodic_worker, daemon=True)
         self.worker_thread.start()
