@@ -28,6 +28,15 @@ def main():
     query_course = random.choice(courses)
     query_json = json.dumps(query_course)
     
+    # Query BEFORE failure
+    query_node_before = random.choice(nodes)
+    print(f"\nPerforming similarity search BEFORE failure via Node {query_node_before.address}...")
+    results_before = query_node_before.get_similar_courses(query_json)
+    print("Top 5 Results BEFORE failure:")
+    for idx, r_json in enumerate(results_before):
+        r = json.loads(r_json)
+        print(f"  {idx + 1}. {r['course_title']} (ID: {r['course_id']}) [Similarity: {r.get('similarity', 0.0):.4f}]")
+    
     # 8. Simulate Node Failure and verify Replication
     print_separator()
     print("Simulating Node Failure to Test Replication (Fault Tolerance)...")
@@ -67,18 +76,29 @@ def main():
         expected_clusters = {str(i) for i in range(5)}
         replication_healed = (all_primaries == expected_clusters and all_replicas == expected_clusters)
 
-        query_node = random.choice(nodes)
-        print(f"\nAttempting to retrieve similar courses for '{query_course['course_title']}' from surviving node {query_node.address}...")
+        query_node_after = random.choice(nodes)
+        print(f"\nAttempting to retrieve similar courses AFTER failure via surviving Node {query_node_after.address}...")
         
         start_time = time.time()
-        recovered_list = query_node.get_similar_courses(query_json, nprobe=1)
+        results_after = query_node_after.get_similar_courses(query_json)
         duration = (time.time() - start_time) * 1000
         
-        print(f"Query returned {len(recovered_list)} courses in {duration:.1f}ms.")
-        if recovered_list and replication_healed:
-            print("=> SUCCESS: Data was successfully retrieved and replication factor (R=1) was fully healed!")
+        print("\nTop 5 Results AFTER failure:")
+        for idx, r_json in enumerate(results_after):
+            r = json.loads(r_json)
+            print(f"  {idx + 1}. {r['course_title']} (ID: {r['course_id']}) [Similarity: {r.get('similarity', 0.0):.4f}]")
+
+        print(f"\nQuery returned {len(results_after)} courses in {duration:.1f}ms.")
+        
+        # Verify recall
+        titles_before = [json.loads(r)['course_id'] for r in results_before]
+        titles_after = [json.loads(r)['course_id'] for r in results_after]
+        recall_matched = (titles_before == titles_after and len(titles_after) > 0)
+
+        if recall_matched and replication_healed:
+            print("=> SUCCESS: Data was successfully retrieved, recall is identical, and replication factor (R=1) was fully healed!")
         else:
-            print(f"=> FAILURE: Data retrieval or replica healing failed. (Data found: {bool(recovered_list)}, Replication healed: {replication_healed})")
+            print(f"=> FAILURE: Data retrieval, recall, or replica healing failed. (Recall matched: {recall_matched}, Replication healed: {replication_healed})")
 
     teardown_network(nodes)
 
