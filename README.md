@@ -17,7 +17,7 @@ This repository implements and compares three different architectural approaches
 ## 🔑 Key Architectural Features
 
 1. **Semantic Centroid Routing:** Nodes automatically vectorize raw text using TF-IDF and route the data to the correct cluster ID on the DHT ring.
-2. **True Vector Embeddings:** Text is vectorized exactly *once* during insertion (`PUT`), avoiding heavy $O(N)$ text-processing bottlenecks during queries.
+2. **True Vector Embeddings:** Text is vectorized exactly _once_ during insertion (`PUT`), avoiding heavy $O(N)$ text-processing bottlenecks during queries.
 3. **`nprobe` Distributed Fanout:** Similarity queries (`GET`) can seamlessly branch out across multiple mathematical clusters simultaneously to merge results, allowing a dynamic trade-off between speed and recall.
 4. **Active Replica Load Balancing:** Solves the notorious "Hot Spot" CPU problem. If a node detects high query load, it mathematically delegates the read queries to its replica node, doubling the read capacity of the network without any data migration!
 5. **Self-Healing Fault Tolerance:** Standard Chord stabilization protocols ensure that if a Primary node crashes, the Replica node instantly promotes its backup data to Primary.
@@ -26,31 +26,36 @@ This repository implements and compares three different architectural approaches
 
 ## 🚀 Setup Instructions
 
-This project requires a standard Python environment (Python 3.8+ recommended). 
+This project requires a standard Python environment (Python 3.8+ recommended).
 
 ### 1. Create a Virtual Environment (Recommended)
+
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 ```
 
 ### 2. Install Dependencies
+
 ```bash
 pip install -r requirements.txt
 ```
 
 ### 3. Configuration
+
 The system parameters are fully decoupled from the code. You must create a local configuration file before running anything:
+
 ```bash
 cp config.yaml.example config.yaml
 ```
-*(You can open `config.yaml` to modify the number of nodes, replication factor (RF), ports, and dataset paths).*
+
+_(You can open `config.yaml` to modify the number of nodes, replication factor (RF), ports, and dataset paths)._
 
 ---
 
 ## 🧠 Dataset Creation & ML Training Pipeline
 
-Before running any simulations, the nodes need mathematical centroids to perform semantic routing. 
+Before running any simulations, the nodes need mathematical centroids to perform semantic routing.
 
 **Step 1: Generate the Raw Dataset**
 (If not already present in `data/storage/data.json`, generate the synthetic courses).
