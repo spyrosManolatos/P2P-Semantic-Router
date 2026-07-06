@@ -3,4 +3,4 @@
 */__pycache__
 config.yaml
 data/storage/data.json
-src/ml/storage
+src/ml/storage/centroids.json
