@@ -6,7 +6,7 @@ import os
 # Add project root to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from src.config_loader import load_config
+from core.config_loader import load_config
 
 def load_vocab(path):
     if not os.path.exists(path): 

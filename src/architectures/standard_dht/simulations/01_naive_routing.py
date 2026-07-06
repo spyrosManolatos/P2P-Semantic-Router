@@ -3,12 +3,9 @@ import time
 import sys
 import os
 
-# Add project root to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
-
-from src.naive.simulations.utils import setup_network, teardown_network, load_courses
-from src.config_loader import load_config
-from src.naive.node import NaiveChordNode
+from utils import setup_network, teardown_network, load_courses
+from core.config_loader import load_config
+from node import NaiveChordNode
 
 def run():
     print("=== Simulation 01: Naive Routing (Baseline) ===")

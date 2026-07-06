@@ -9,7 +9,7 @@ from socketserver import ThreadingMixIn
 import hashlib
 import time
 from typing import List, Dict, Optional, Tuple, Any
-from src.config_loader import load_config
+from core.config_loader import load_config
 
 class ThreadedXMLRPCServer(ThreadingMixIn, SimpleXMLRPCServer):
     pass
