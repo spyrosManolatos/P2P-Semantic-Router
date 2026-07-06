@@ -10,7 +10,7 @@ class ConfigLoader:
         if cls._config is None:
             # Locate config.yaml in the project root (one level up from src/)
             current_dir = os.path.dirname(os.path.abspath(__file__))
-            project_root = os.path.dirname(current_dir)
+            project_root = os.path.dirname(os.path.dirname(current_dir))
             config_path = os.path.join(project_root, "config.yaml")
             
             if not os.path.exists(config_path):

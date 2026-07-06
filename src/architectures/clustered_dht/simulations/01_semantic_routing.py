@@ -20,7 +20,7 @@ def main():
     print_separator()
     
     cluster_destinations = {}
-    for cid in range(5):
+    for cid in range(nodes[0].k):
         c_hash = nodes[0].get_cluster_hash(cid)
         dest_node = nodes[0].find_successor(str(c_hash))
         cluster_destinations[cid] = (c_hash, dest_node)
