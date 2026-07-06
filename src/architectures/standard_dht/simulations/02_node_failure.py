@@ -3,11 +3,9 @@ import time
 import sys
 import os
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
-
-from src.naive.simulations.utils import teardown_network, load_courses
-from src.naive.node import NaiveChordNode
-from src.config_loader import load_config
+from utils import teardown_network, load_courses
+from core.config_loader import load_config
+from node import NaiveChordNode
 
 def run():
     print("=== Simulation 02: Naive Node Failure & Recovery ===")

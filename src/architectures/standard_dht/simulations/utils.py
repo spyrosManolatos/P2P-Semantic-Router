@@ -1,8 +1,16 @@
+import os
+import sys
 import json
 import time
 from typing import List
-from src.naive.node import NaiveChordNode
-from src.config_loader import load_config
+
+# Add the root 'src/' directory to sys.path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
+# Add the architecture directory so we can import 'node'
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from node import NaiveChordNode
+from core.config_loader import load_config
 
 def load_courses() -> List[dict]:
     config = load_config()

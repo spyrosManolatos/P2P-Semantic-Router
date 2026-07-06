@@ -3,11 +3,8 @@ import time
 import sys
 import os
 
-# Add project root to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
-
-from src.naive.simulations.utils import setup_network, teardown_network, load_courses
-from src.naive.node import NaiveChordNode
+from utils import setup_network, teardown_network, load_courses
+from node import NaiveChordNode
 
 def run():
     print("=== Simulation 04: Naive Node Join & Data Migration ===")
