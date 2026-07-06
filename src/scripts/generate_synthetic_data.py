@@ -5,7 +5,11 @@ import random
 import argparse
 from typing import List, Dict, Any
 from faker import Faker
+import sys
 
+# Ensure src/ is in the python path to import core
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from core import config_loader
 # Define 5 categories enum
 CATEGORIES = [
     "Computer Science",
@@ -79,18 +83,22 @@ def generate_fake_courses(num_courses: int) -> List[Dict[str, Any]]:
     return courses
 
 def main():
+    config = config_loader.load_config()
+    default_num_courses = config.get('storage', {}).get('num_courses', 20)
+    default_output = config.get('storage', {}).get('data_path', os.path.join(os.path.dirname(__file__), "data.json"))
+
     parser = argparse.ArgumentParser(description="Generate synthetic course data.")
     parser.add_argument(
         "--num-courses",
         type=int,
-        default=20,
-        help="Number of fake courses to generate (default: 20)"
+        default=default_num_courses,
+        help=f"Number of fake courses to generate (default: {default_num_courses})"
     )
     parser.add_argument(
         "--output",
         type=str,
-        default=os.path.join(os.path.dirname(__file__), "data.json"),
-        help="Path to the JSON file where generated data will be saved"
+        default=default_output,
+        help=f"Path to the JSON file where generated data will be saved (default: {default_output})"
     )
     parser.add_argument(
         "--append",
