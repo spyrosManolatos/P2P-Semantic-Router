@@ -6,11 +6,12 @@ Unlike traditional categorical DHTs that rely on random SHA-1 hashing, this arch
 
 ## 🏗️ Approaches Implemented
 
-This repository implements and compares three different architectural approaches to Vector Search:
+This repository implements and compares four different architectural approaches to Vector Search:
 
-1. **Monolithic Linear Search (`src/monolithic_linear_search/`):** A centralized baseline that performs an exhaustive linear scan (exact KNN) over all vectors. Provides perfect recall but scales poorly as $O(N)$.
-2. **Naive Distributed DHT (`src/naive/`):** A standard Chord DHT implementation where vectors are distributed using random SHA-1 hashing. Provides highly scalable storage, but similarity queries are inefficient as they require broadcasting to all nodes because semantic locality is lost.
-3. **P2P Semantic Router (`src/semantic/`):** The novel approach where the DHT ring is mathematically partitioned using K-Means centroids. Data is routed based on semantic similarity rather than random hashes, allowing for $O(1)$ routing to the correct cluster and distributed `nprobe` fanout for similarity searches.
+1. **Monolithic Linear Search (`src/architectures/monolithic_linear/`):** A centralized baseline that performs an exhaustive linear scan (exact KNN) over all vectors. Provides perfect recall but scales poorly as $O(N)$.
+2. **Standard DHT (`src/architectures/standard_dht/`):** A standard Chord DHT implementation where vectors are distributed using random SHA-1 hashing. Provides highly scalable storage, but similarity queries are inefficient as they require broadcasting to all nodes because semantic locality is lost.
+3. **Clustered DHT (`src/architectures/clustered_dht/`):** A hybrid baseline where data is grouped via K-Means, but the clusters are placed on the ring using random SHA-1 hashing rather than semantic geometric mapping. 
+4. **P2P Semantic Router (`src/architectures/semantic_router/`):** The novel approach where the DHT ring is mathematically partitioned using K-Means centroids. Data is routed based on semantic similarity rather than random hashes, allowing for $O(1)$ routing to the correct cluster and distributed `nprobe` fanout for similarity searches.
 
 ---
 
@@ -55,63 +56,61 @@ _(You can open `config.yaml` to modify the number of nodes, replication factor (
 
 ## 🧠 Dataset Creation & ML Training Pipeline
 
-Before running any simulations, the nodes need mathematical centroids to perform semantic routing.
+Before running any simulations, the nodes need mathematical centroids to perform semantic routing. The dataset and models will be cleanly saved to the `data/` directory.
 
 **Step 1: Generate the Raw Dataset**
-(If not already present in `data/storage/data.json`, generate the synthetic courses).
+Generate synthetic courses to populate `data/raw/data.json`. The number of courses is defined in `config.yaml` (`num_courses`).
 ```bash
-python3 data/generate_synthetic_data.py
+python3 src/scripts/generate_synthetic_data.py
 ```
 
 **Step 2: Train the Semantic K-Means Centroids**
-This script parses the raw dataset, builds a TF-IDF vocabulary, and trains the semantic clusters (default K=5). The resulting `centroids.json` is saved in the semantic model storage so the DHT nodes can use it for $O(1)$ routing.
+This script parses the raw dataset, builds a TF-IDF vocabulary, and trains the semantic clusters. The resulting `centroids.json` is saved in `data/models/` so the DHT nodes can use it for $O(1)$ routing.
 ```bash
-python3 src/semantic/ml_models/train_centroids.py
+python3 src/ml/train_centroids.py
 ```
 
 ---
 
 ## 🧪 Running the Simulations
 
-To mathematically prove the architecture, the project includes isolated simulation scripts. These scripts will read `config.yaml`, spin up a local P2P network (e.g., 10 nodes), inject the dataset, execute tests, and gracefully shut down.
+To mathematically prove the architecture, the project includes isolated simulation scripts for each architecture. These scripts will read `config.yaml`, spin up a local P2P network (e.g., 10 nodes), inject the dataset, execute tests, and gracefully shut down.
 
-Run these commands from the root directory:
+Run these commands from the root directory to test the **Semantic Router**:
 
 **Simulation 1: Semantic Routing & KNN**
 Proves the non-random ring mapping and the distributed Cosine Similarity top-5 ranking.
 ```bash
-python3 src/semantic/simulations/01_semantic_routing.py
+python3 src/architectures/semantic_router/simulations/01_semantic_routing.py
 ```
 
 **Simulation 2: Fault Tolerance**
 Proves standard DHT self-healing. Kills a node abruptly and verifies that the successor recovers the ring.
 ```bash
-python3 src/semantic/simulations/02_node_failure.py
+python3 src/architectures/semantic_router/simulations/02_node_failure.py
 ```
 
 **Simulation 3: Active Replica CPU Delegation**
 Proves the hot-spot load balancer. Blasts a specific cluster with rapid-fire queries and verifies that the Primary node successfully delegates the traffic to its successor.
 ```bash
-python3 src/semantic/simulations/03_load_balancing.py
+python3 src/architectures/semantic_router/simulations/03_load_balancing.py
 ```
 
 **Simulation 4: Dynamic Node Join & Replication**
 Proves the self-healing and data migration of a new node joining an existing network, correctly inheriting the network's Replication Factor (RF) via Bootstrap discovery.
 ```bash
-python3 src/semantic/simulations/04_node_join.py
+python3 src/architectures/semantic_router/simulations/04_node_join.py
 ```
+
+_(You can run identical simulation scripts located inside the `src/architectures/clustered_dht/simulations/` and `src/architectures/standard_dht/simulations/` directories to compare their outputs.)_
 
 ---
 
 ## 🔮 Future Work
 
-As the core architecture of the P2P Semantic Router is established, future development will focus on rigorous evaluation and deployment realism:
+As the core architectures of the P2P Semantic Router and its baselines are established, future development will focus on rigorous evaluation and deployment realism:
 
-1. **Implement Clustered DHT (Intermediate Baseline):**
-   - Build a hybrid approach where data is clustered via K-Means, but the cluster IDs are placed on the ring using standard SHA-1 hashing rather than semantic geometric mapping.
-   - **Goal:** This will perfectly isolate variables during benchmarking, proving whether performance gains come purely from grouping data into clusters (Clustered DHT) or from the mathematical adjacent ring placement (Semantic Router).
-
-2. **Comprehensive Benchmarking:**
+1. **Comprehensive Benchmarking:**
    - **Recall:** Evaluating the accuracy of distributed similarity searches against the monolithic baseline.
    - **Network Hops:** Profiling the routing efficiency and the impact of the `nprobe` fanout mechanism.
    - **Latency:** Measuring end-to-end query resolution times under various network sizes.

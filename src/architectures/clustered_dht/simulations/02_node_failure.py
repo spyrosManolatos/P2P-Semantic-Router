@@ -73,7 +73,7 @@ def main():
         print(f"  Primary clusters in network: {sorted(list(all_primaries))}")
         print(f"  Replica clusters in network: {sorted(list(all_replicas))}")
         
-        expected_clusters = {str(i) for i in range(5)}
+        expected_clusters = {str(i) for i in range(nodes[0].k)}
         replication_healed = (all_primaries == expected_clusters and all_replicas == expected_clusters)
 
         query_node_after = random.choice(nodes)

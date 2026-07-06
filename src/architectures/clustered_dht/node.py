@@ -11,9 +11,9 @@ from xmlrpc.server import SimpleXMLRPCServer
 import xmlrpc.client
 import sys
 
-# Ensure src/ is in the python path to import config_loader
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import config_loader
+# Ensure src/ is in the python path to import core
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from core import config_loader
 
 # Set a global socket timeout to prevent RPC client calls from hanging indefinitely
 socket.setdefaulttimeout(3.0)
@@ -85,10 +85,8 @@ class ChordNode:
                 self.centroids = data["centroids"]
 
     def get_cluster_hash(self, cluster_id: int) -> int:
-        """Maps a cluster ID linearly across the 0 to 2^m Chord ring to preserve locality."""
-        if self.k <= 0: return 0
-        chunk_size = (2 ** self.m) // self.k
-        return cluster_id * chunk_size
+        """Hashes a cluster ID using SHA-1 to place it randomly on the Chord ring (destroys semantic ring locality)."""
+        return self.get_hash(f"cluster_{cluster_id}")
 
     def _vectorize(self, text: str) -> List[float]:
         """Converts text to an L2 normalized TF vector."""

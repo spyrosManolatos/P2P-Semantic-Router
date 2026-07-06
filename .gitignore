@@ -2,5 +2,5 @@
 *.pyc
 */__pycache__
 config.yaml
-data/storage/data.json
-src/semantic/ml_models/storage
+data/raw/data.json
+data/models/centroids.json

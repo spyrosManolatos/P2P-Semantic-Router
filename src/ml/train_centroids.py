@@ -7,9 +7,9 @@ from sklearn.cluster import KMeans
 from scipy.cluster.hierarchy import linkage, leaves_list
 import sys
 
-# Ensure src/ is in the python path to import config_loader
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-import config_loader
+# Ensure src/ is in the python path to import core
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from core import config_loader
 
 def main():
     config = config_loader.load_config()

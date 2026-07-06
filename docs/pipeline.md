@@ -1,6 +1,6 @@
-# The P2P Semantic Router Pipeline
+# Novel Implementation: The P2P Semantic Router Pipeline
 
-This document outlines the complete architectural pipeline of the Decentralized Vector Database, demonstrating the integration of Machine Learning (ML) clustering with Peer-to-Peer (P2P) Distributed Hash Table (DHT) networks.
+This document outlines the complete architectural pipeline of our novel Decentralized Vector Database, demonstrating the integration of Machine Learning (ML) clustering with Peer-to-Peer (P2P) Distributed Hash Table (DHT) networks.
 
 ---
 
@@ -8,8 +8,8 @@ This document outlines the complete architectural pipeline of the Decentralized 
 Before the decentralized network boots up, we must mathematically define the semantic landscape.
 
 1. **TF-IDF Vectorization**: Raw text (Title + Category + Description) from a large training dataset is converted into high-dimensional mathematical vectors.
-2. **K-Means Clustering ($O(N)$)**: We run a highly efficient K-Means algorithm over the entire dataset to instantly isolate the $K=5$ semantic center points (centroids).
-3. **Agglomerative Hierarchical Clustering ($O(1)$)**: To ensure *semantic locality* on a 1D network ring, we run Agglomerative Clustering strictly on the 5 centroids. This builds a dendrogram (a tree). We flatten the leaves of this tree from left-to-right to establish a perfect 1D semantic sequence.
+2. **K-Means Clustering ($O(N)$)**: We run a highly efficient K-Means algorithm over the entire dataset to instantly isolate the $K$ semantic center points (centroids).
+3. **Agglomerative Hierarchical Clustering ($O(1)$)**: To ensure *semantic locality* on a 1D network ring, we run Agglomerative Clustering strictly on the $K$ centroids. This builds a dendrogram (a tree). We flatten the leaves of this tree from left-to-right to establish a perfect 1D semantic sequence.
 4. **Export**: The ordered centroids and the TF-IDF vocabulary are saved to `centroids.json`.
 
 ---
@@ -24,7 +24,7 @@ Before the decentralized network boots up, we must mathematically define the sem
 When a user uploads a new course to *any* peer in the network:
 
 1. **Local Embedding**: The entry peer vectorizes the text using the pre-loaded vocabulary. Crucially, it **embeds the mathematical vector directly into the JSON data structure**.
-2. **Centroid Proximity**: Using Euclidean distance, the peer determines which of the 5 global centroids the new vector is closest to (e.g., Cluster 2).
+2. **Centroid Proximity**: Using Euclidean distance, the peer determines which of the global centroids the new vector is closest to (e.g., Cluster 2).
 3. **DHT Routing**: The peer calculates the physical location of Cluster 2 on the ring and traverses the finger tables to forward the JSON payload to the responsible Primary Peer.
 4. **Active Replication**: The Primary Peer saves the data to its local disk and immediately forwards a backup copy to its mathematical successor for fault tolerance.
 
