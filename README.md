@@ -192,3 +192,9 @@ With the core architectures, dynamic self-healing, replication data migration, a
 
 4. **Massive Scale-Out Evaluations:**
    - Scaling deployments to 1,000+ nodes to test high-dimensional vector partitioning and confirm $O(\log N)$ network routing hops at a true enterprise scale.
+
+---
+
+## 👥 Credits & Attributions
+
+This project uses the **Udemy Courses Dataset** compiled and published on Kaggle by [Emre Bayir](https://www.kaggle.com/datasets/emrebayirr/udemy-course-dataset-categories-ratings-and-trends). We thank the author for providing this comprehensive set of course metrics and descriptions for empirical study.

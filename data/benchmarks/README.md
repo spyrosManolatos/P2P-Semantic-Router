@@ -2,7 +2,7 @@
 
 This directory contains the automated benchmarking scripts and their generated data outputs.
 
-All evaluations are conducted using subsets of the **Kaggle Udemy Courses Dataset** (extracted from raw CSV and pre-processed into `data/raw/normalized_kaggle_courses.json` containing 98,104 courses).
+All evaluations are conducted using subsets of the **Kaggle Udemy Courses Dataset** (sourced from [Emre Bayir's Udemy Courses Dataset categories, ratings, and trends](https://www.kaggle.com/datasets/emrebayirr/udemy-course-dataset-categories-ratings-and-trends) on Kaggle). The raw CSV is pre-processed and normalized into `data/raw/normalized_kaggle_courses.json` containing 98,104 unique courses.
 
 ---
 
