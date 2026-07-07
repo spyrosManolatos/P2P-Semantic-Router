@@ -106,6 +106,19 @@ _(You can run identical simulation scripts located inside the `src/architectures
 
 ---
 
+## 📊 Benchmarks & Results
+
+To evaluate the empirical trade-offs of the system, this project includes a benchmarking suite (`src/benchmarks/run_benchmarks.py`) that tests the architectures at scale (e.g., 2,000 courses, 6 nodes, 80 clusters, testing multiple `nprobe` levels).
+
+The automated scripts measure and plot:
+- **Search Recall:** Accuracy against a monolithic exact-KNN baseline.
+- **Network Hops:** Routing overhead and the impact of target node deduplication.
+- **End-to-End Latency:** The latency scaling advantage of semantic clustering.
+
+**All benchmarking output data and visualization charts are generated and stored in the [`data/benchmarks`](data/benchmarks/README.md) directory.** Please view the README in that directory for a full breakdown of our latest findings!
+
+---
+
 ## 🔮 Future Work
 
 As the core architectures of the P2P Semantic Router and its baselines are established, future development will focus on rigorous evaluation and deployment realism:

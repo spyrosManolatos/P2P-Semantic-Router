@@ -14,13 +14,32 @@ from core import config_loader
 def main():
     config = config_loader.load_config()
     
-    parser = argparse.ArgumentParser(description="Train KMeans centroids on synthetic course data using TF-IDF.")
+    parser = argparse.ArgumentParser(description="Train KMeans centroids on course data using TF-IDF.")
     parser.add_argument("--k", type=int, default=config['kmeans']['clusters'], help="Number of clusters (centroids) to generate.")
+    parser.add_argument("--dataset", type=str, choices=["synthetic", "kaggle"], default="kaggle", help="Which dataset to train on.")
     args = parser.parse_args()
 
-    data_path = config['storage']['data_path']
+    # Select the correct input/output paths based on dataset flag
+    try:
+        if args.dataset == "synthetic":
+            data_path = config['storage']['data']['synthetic_path']
+            out_path = config['storage']['centroids']['synthetic_path']
+        else:
+            data_path = config['storage']['data']['kaggle']['normalized_path']
+            out_path = config['storage']['centroids']['kaggle_dataset_path']
+    except KeyError as e:
+        print(f"Error: Missing configuration key {e} in config.yaml")
+        return
+
+    # Ensure paths are absolute (fallback if config_loader didn't resolve them)
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    if not os.path.isabs(data_path):
+        data_path = os.path.join(project_root, data_path)
+    if not os.path.isabs(out_path):
+        out_path = os.path.join(project_root, out_path)
+
     if not os.path.exists(data_path):
-        print(f"Error: {data_path} not found. Please generate synthetic data first.")
+        print(f"Error: {data_path} not found. Please generate/ingest data first.")
         return
 
     # 1. Load data
@@ -95,7 +114,6 @@ def main():
         "centroids": centroids.tolist()  # Convert numpy array to list for JSON serialization
     }
 
-    out_path = config['storage']['centroids_path']
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(out_data, f, indent=4)

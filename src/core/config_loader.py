@@ -20,12 +20,16 @@ class ConfigLoader:
                 cls._config = yaml.safe_load(f)
                 
             # Automatically resolve paths so that scripts can be executed from anywhere
-            cls._config['storage']['centroids_path'] = os.path.abspath(
-                os.path.join(project_root, cls._config['storage']['centroids_path'])
-            )
-            cls._config['storage']['data_path'] = os.path.abspath(
-                os.path.join(project_root, cls._config['storage']['data_path'])
-            )
+            def resolve_paths(d):
+                if isinstance(d, dict):
+                    for k, v in d.items():
+                        if isinstance(v, str) and k.endswith('_path'):
+                            d[k] = os.path.abspath(os.path.join(project_root, v))
+                        elif isinstance(v, dict):
+                            resolve_paths(v)
+                            
+            if 'storage' in cls._config:
+                resolve_paths(cls._config['storage'])
             
         return cls._config
 

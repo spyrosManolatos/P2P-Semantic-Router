@@ -25,47 +25,56 @@ def vectorize(text, vocab):
         return [v/norm for v in vec]
     return vec
 
+class MonolithicSearcher:
+    def __init__(self, dataset="kaggle"):
+        config = load_config()
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        
+        if dataset == "synthetic":
+            data_path = os.path.join(project_root, config['storage']['data']['synthetic_path'])
+            centroids_path = os.path.join(project_root, config['storage']['centroids']['synthetic_path'])
+        else:
+            data_path = os.path.join(project_root, config['storage']['data']['kaggle']['normalized_path'])
+            centroids_path = os.path.join(project_root, config['storage']['centroids']['kaggle_dataset_path'])
+            
+        if not os.path.exists(data_path):
+            data_path = config['storage']['data']['synthetic_path']
+            centroids_path = config['storage']['centroids']['synthetic_path']
+
+        with open(data_path, 'r', encoding='utf-8') as f:
+            self.courses = json.load(f)
+            
+        self.vocab = load_vocab(centroids_path)
+        print(f"[Monolithic Baseline] Loaded {len(self.courses)} courses from: {data_path}")
+        
+    def search(self, query_text: str, top_k: int = 5):
+        q_vec = vectorize(query_text, self.vocab)
+        
+        scored = []
+        for c in self.courses:
+            c_text = f"{c['course_title']} {c['category']} {c['description']}"
+            c_vec = vectorize(c_text, self.vocab)
+            sim = sum(qv * cv for qv, cv in zip(q_vec, c_vec))
+            scored.append((sim, c))
+            
+        # Sort by Cosine Similarity descending
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return scored[:top_k]
+
 def run():
     print("=== Monolithic Linear Similarity Search (Ground Truth) ===")
-    config = load_config()
-    
-    # Path resolution
-    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    data_path = os.path.join(project_root, config['storage']['data_path'])
-    centroids_path = os.path.join(project_root, config['storage']['centroids_path'])
-    
-    if not os.path.exists(data_path):
-        data_path = config['storage']['data_path']
-        centroids_path = config['storage']['centroids_path']
-
-    with open(data_path, 'r', encoding='utf-8') as f:
-        courses = json.load(f)
-        
-    vocab = load_vocab(centroids_path)
-    print(f"Loaded {len(courses)} courses from: {data_path}")
-    print(f"Loaded vocabulary size: {len(vocab)}")
-    print("-" * 50)
+    searcher = MonolithicSearcher(dataset="kaggle")
     
     # Target Query Course
-    query_course = courses[0] # "Methods of Artificial Intelligence"
+    query_course = searcher.courses[0]
+    query_text = f"{query_course['course_title']} {query_course['category']} {query_course['description']}"
+    
     print(f"Querying for courses similar to: '{query_course['course_title']}'")
     
-    # Vectorize query
-    q_text = f"{query_course['course_title']} {query_course['category']} {query_course['description']}"
-    q_vec = vectorize(q_text, vocab)
-    
-    scored = []
-    for c in courses:
-        c_text = f"{c['course_title']} {c['category']} {c['description']}"
-        c_vec = vectorize(c_text, vocab)
-        sim = sum(qv * cv for qv, cv in zip(q_vec, c_vec))
-        scored.append((sim, c))
-        
-    # Sort by Cosine Similarity descending
-    scored.sort(key=lambda x: x[0], reverse=True)
+    results = searcher.search(query_text, top_k=5)
     
     print("\nTop 5 Results (Exact Centralized Linear Search):")
-    for idx, (sim, c) in enumerate(scored[:5]):
+    for idx, (sim, c) in enumerate(results):
         print(f"  {idx + 1}. {c['course_title']} (ID: {c['course_id']}) [Similarity: {sim:.4f}]")
     print("-" * 50)
 
