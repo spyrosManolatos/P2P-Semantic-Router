@@ -4,6 +4,30 @@ This project is a Proof of Concept (v1.0) for a highly scalable, decentralized V
 
 Unlike traditional categorical DHTs that rely on random SHA-1 hashing, this architecture mathematically maps K-Means semantic clusters across the circular ring. This ensures that semantically similar data is hosted in identical or adjacent network regions, enabling powerful distributed fanout queries.
 
+## 📂 Directory Layout
+
+```text
+├── data/                      # Database and results storage
+│   ├── benchmarks/            # Evaluation results and documentation
+│   │   ├── plots/             # Rendered evaluation charts (PNG)
+│   │   ├── results/           # Raw collected metric data (JSON)
+│   │   └── README.md          # Benchmark results analysis report
+│   ├── models/                # Trained K-Means centroids and TF-IDF artifacts
+│   └── raw/                   # Udemy Kaggle CSV dataset and normalized JSON payloads
+├── src/                       # Database source code
+│   ├── architectures/         # Database topologies and simulations
+│   │   ├── monolithic_linear/ # Centralized exhaustive KNN baseline
+│   │   ├── standard_dht/      # Standard random-hash Chord DHT ring
+│   │   ├── clustered_dht/     # Hashed K-Means clusters DHT ring
+│   │   └── semantic_router/   # Mapped Agglomerative semantic Chord ring (Proposed)
+│   ├── benchmarks/            # Scalability, fault-tolerance, and load-balancing benchmarks
+│   ├── core/                  # Decoupled config loader and shared core utilities
+│   ├── ml/                    # ML clustering and vocabulary training pipeline
+│   └── scripts/               # Kaggle csv normalizer and synthetic course generators
+├── config.yaml                # Decoupled network and database parameters file
+└── README.md                  # Main project overview and run instructions
+```
+
 ## 🏗️ Approaches Implemented
 
 This repository implements and compares four different architectural approaches to Vector Search:
@@ -106,15 +130,71 @@ _(You can run identical simulation scripts located inside the `src/architectures
 
 ---
 
+## 📊 Benchmarks & Results
+
+To evaluate the empirical trade-offs of the system, this project includes a consolidated benchmarking suite (`src/benchmarks/evaluate.py`) that tests the architectures across various metrics.
+
+### Running the Evaluation Suite
+You can execute the benchmarks for specific components or run the entire suite:
+
+*   **Run all benchmarks end-to-end (Recommended):**
+    ```bash
+    python3 src/benchmarks/evaluate.py --mode all
+    ```
+*   **Run specific benchmark modes:**
+    - **Scaling:** Multi-architecture comparison (Standard DHT, Clustered DHT, Semantic Router) at a scale of 2,000 courses.
+      ```bash
+      python3 src/benchmarks/evaluate.py --mode scale --dataset_size 2000
+      ```
+    - **Fault Tolerance:** Evaluation under node crashes (0% to 33.3% failures) with replication factor `RF=3`.
+      ```bash
+      python3 src/benchmarks/evaluate.py --mode fault --replication_factor 3
+      ```
+    - **Node Join:** Data migration and ring healing evaluation.
+      ```bash
+      python3 src/benchmarks/evaluate.py --mode join --replication_factor 3
+      ```
+    - **Load Balancing:** Average latency scaling under concurrent workloads (with vs. without delegation).
+      ```bash
+      python3 src/benchmarks/evaluate.py --mode load --replication_factor 3
+      ```
+
+### Generating Visualization Charts
+After running the evaluations, generate all metrics curves and comparison plots by running:
+```bash
+python3 src/benchmarks/plot.py
+```
+
+### Metrics Measured:
+- **Search Recall:** Accuracy against a monolithic exact-KNN baseline.
+- **Network Hops:** Average routing hops and the impact of target node deduplication.
+- **End-to-End Latency:** Latency scaling advantages under single and concurrent workloads.
+- **Healing & Migration Speed:** Duration (in seconds) for rings to stabilize and transfer replica data over RPC.
+
+**All raw collected metrics are saved in `data/benchmarks/results/` and generated visualization charts are stored in the [`data/benchmarks/plots/`](data/benchmarks/README.md) directory.** Please view the README in [`data/benchmarks/README.md`](data/benchmarks/README.md) for a full analysis of the findings!
+
+---
+
 ## 🔮 Future Work
 
-As the core architectures of the P2P Semantic Router and its baselines are established, future development will focus on rigorous evaluation and deployment realism:
+With the core architectures, dynamic self-healing, replication data migration, and active replica load-balancing fully benchmarked, future work will focus on scaling the deployment to production-grade distributed environments:
 
-1. **Comprehensive Benchmarking:**
-   - **Recall:** Evaluating the accuracy of distributed similarity searches against the monolithic baseline.
-   - **Network Hops:** Profiling the routing efficiency and the impact of the `nprobe` fanout mechanism.
-   - **Latency:** Measuring end-to-end query resolution times under various network sizes.
+1. **Containerized Network Emulation (Real Latency & Bandwidth Constraints):**
+   - Moving from `localhost` loopback socket configurations to dedicated Docker/Kubernetes container deployments.
+   - Introducing real physical network propagation latency (e.g., 5ms to 50ms) across regions to evaluate the overhead of multi-hop Chord routing queries and background stabilization.
 
-3. **Containerization & Distributed Simulation:**
-   - Packaging nodes into isolated Docker containers.
-   - Using Docker Compose to orchestrate realistic network topologies, allowing for the simulation of network latency, partition events, and resource constraints in a true distributed environment.
+2. **Multi-Core Hardware Isolation (GIL Workload Optimization):**
+   - Setting explicit CPU and memory resource constraints (limits/requests) per containerized node.
+   - Measuring concurrent throughput scaling without local Python GIL thread-scheduling bottlenecks to prove true linear throughput scaling of active delegation.
+
+3. **Network Chaos Engineering & Unclean Crashes:**
+   - Utilizing tools like Chaos Mesh to inject packet drops, random packet delay (jitter), and split-brain network partitions to evaluate the robustness of the Chord ring stabilization protocols under adversarial network conditions.
+
+4. **Massive Scale-Out Evaluations:**
+   - Scaling deployments to 1,000+ nodes to test high-dimensional vector partitioning and confirm $O(\log N)$ network routing hops at a true enterprise scale.
+
+---
+
+## 👥 Credits & Attributions
+
+This project uses the **Udemy Courses Dataset** compiled and published on Kaggle by [Emre Bayir](https://www.kaggle.com/datasets/emrebayirr/udemy-course-dataset-categories-ratings-and-trends). We thank the author for providing this comprehensive set of course metrics and descriptions for empirical study.

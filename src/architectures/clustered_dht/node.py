@@ -8,15 +8,19 @@ import math
 import os
 from typing import List, Dict, Any, Optional
 from xmlrpc.server import SimpleXMLRPCServer
+from socketserver import ThreadingMixIn
 import xmlrpc.client
 import sys
+
+class ThreadedXMLRPCServer(ThreadingMixIn, SimpleXMLRPCServer):
+    pass
 
 # Ensure src/ is in the python path to import core
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from core import config_loader
 
-# Set a global socket timeout to prevent RPC client calls from hanging indefinitely
-socket.setdefaulttimeout(3.0)
+# Removed global socket timeout to prevent GIL thread pool backlog timeouts during rapid injection
+
 
 def in_half_open_range(val: int, start: int, end: int) -> bool:
     """Checks if val is in (start, end] on the circular ring."""
@@ -39,8 +43,9 @@ def in_open_range(val: int, start: int, end: int) -> bool:
 class ChordNode:
     """A node in the Chord distributed hash table."""
 
-    def __init__(self, ip: str, port: int, m: int = None, r: int = None):
+    def __init__(self, ip: str, port: int, m: int = None, r: int = None, dataset: str = "kaggle"):
         self.config = config_loader.load_config()
+        self.dataset = dataset
         
         self.ip = ip
         self.port = port
@@ -56,7 +61,7 @@ class ChordNode:
         self.successors = [self.address]
         self.predecessor = None
         self.finger_table = [self.address] * self.m
-        self.storage = {}  # Maps str(cluster_id) -> List of course JSON strings
+        self.storage = {}  # Maps str(cluster_id) -> Dict[course_id, course_json]
         
         self.shutdown_event = threading.Event()
         self.server = None
@@ -75,7 +80,11 @@ class ChordNode:
         self._load_centroids()
 
     def _load_centroids(self):
-        path = self.config['storage']['centroids_path']
+        if self.dataset == "synthetic":
+            path = self.config['storage']['centroids']['synthetic_path']
+        else:
+            path = self.config['storage']['centroids']['kaggle_dataset_path']
+            
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -164,6 +173,20 @@ class ChordNode:
             except Exception:
                 return self.successor
 
+    def find_successor_with_hops(self, id_str: str, hop_count: int = 0) -> List[Any]:
+        id_val = int(id_str)
+        if in_half_open_range(id_val, self.node_id, self.successor_id):
+            return [self.successor, hop_count]
+        else:
+            n0_addr = self.closest_preceding_node(id_val)
+            if n0_addr == self.address:
+                return [self.successor, hop_count]
+            try:
+                with self._get_rpc_client(n0_addr) as n0:
+                    return n0.find_successor_with_hops(str(id_val), hop_count + 1)
+            except Exception:
+                return [self.successor, hop_count]
+
     def closest_preceding_node(self, id_val: int) -> str:
         for i in range(self.m - 1, -1, -1):
             finger_addr = self.finger_table[i]
@@ -189,22 +212,17 @@ class ChordNode:
             self.sync_replicas_to_successors()
 
     def store_replica(self, cluster_id: int, value: str) -> bool:
-        """Locally stores a replica course value under its cluster_id."""
         cid_str = str(cluster_id)
         if cid_str not in self.storage:
-            self.storage[cid_str] = []
-        
+            self.storage[cid_str] = {}
+            
         try:
-            new_course = json.loads(value)
-            new_id = new_course.get("course_id")
-            self.storage[cid_str] = [
-                c for c in self.storage[cid_str] 
-                if json.loads(c).get("course_id") != new_id
-            ]
+            # We must load json ONCE to get the course_id for the O(1) dictionary key
+            new_id = json.loads(value).get("course_id")
+            self.storage[cid_str][new_id] = value
         except Exception:
             pass
-
-        self.storage[cid_str].append(value)
+            
         return True
 
     def store_local(self, cluster_id: int, value: str) -> bool:
@@ -219,7 +237,6 @@ class ChordNode:
         return success
 
     def retrieve_local(self, cluster_id: int, is_replica_request: bool = False) -> List[str]:
-        """Locally retrieves the list of course values for a cluster_id."""
         # 1. Load Balancing Delegation (Active Replica)
         if not is_replica_request and self.query_load >= self.LOAD_THRESHOLD and self.successor != self.address:
             print(f"[{self.address}] ⚠️ OVERLOADED! (Load: {self.query_load}). Delegating read query to Replica at {self.successor}...")
@@ -233,7 +250,9 @@ class ChordNode:
                 
         # 2. Serve Locally
         self.query_load += 1
-        return self.storage.get(str(cluster_id), [])
+        if str(cluster_id) in self.storage:
+            return list(self.storage[str(cluster_id)].values())
+        return []
 
     def claim_and_migrate_data(self, new_node_id_str: str, new_node_address: str) -> Dict[str, List[str]]:
         """
@@ -296,7 +315,7 @@ class ChordNode:
                         
                         # If we are the primary holder of this cluster:
                         if in_half_open_range(cat_hash, pred_id, self.node_id):
-                            for course_str in courses:
+                            for course_str in list(courses.values()):
                                 succ_client.store_replica(cluster_id, course_str)
             except Exception as e:
                 print(f"[{self.address}] Failed to sync replicas to {succ}: {e}")
@@ -335,6 +354,7 @@ class ChordNode:
                 with self._get_rpc_client(bootstrap_addr) as bootstrap:
                     try:
                         self.r = bootstrap.get_replication_factor()
+                        self.rf = self.r
                     except Exception:
                         pass
                     succ = bootstrap.find_successor(str(self.node_id))
@@ -400,7 +420,7 @@ class ChordNode:
                 print(f"[{self.address}] Failed to route PUT for cluster {cluster_id} to {target_node}: {e}")
                 return False
 
-    def get_similar_courses(self, course_json: str, nprobe: int = 1) -> List[str]:
+    def get_similar_courses(self, course_json: str, nprobe: int = 1, return_hops: bool = False) -> Any:
         """Finds top `nprobe` clusters, routes GETs, and returns Top-5 courses using Cosine Similarity."""
         course = json.loads(course_json)
         text = f"{course['course_title']} {course['category']} {course['description']}"
@@ -411,21 +431,38 @@ class ChordNode:
         print(f"[{self.address}] Target semantic clusters found: {top_clusters} (nprobe={nprobe})")
         
         results = []
-        # Distributed fanout
+        total_hops = 0
+        unique_nodes = {}  # target_node -> list of cluster_ids
+        
+        # 1. Resolve successors and deduplicate targets
         for cluster_id in top_clusters:
             cluster_hash = self.get_cluster_hash(cluster_id)
-            target_node = self.find_successor(str(cluster_hash))
-            
-            if target_node == self.address:
-                print(f" └──> [{self.address}] Serving cluster {cluster_id} from local disk.")
-                results.extend(self.retrieve_local(cluster_id))
+            if return_hops:
+                target_node, hops = self.find_successor_with_hops(str(cluster_hash))
+                if target_node not in unique_nodes:
+                    unique_nodes[target_node] = []
+                    total_hops += hops  # Only count routing hops to reach this unique node
             else:
-                print(f" └──> [{self.address}] Routing network request for cluster {cluster_id} to {target_node}...")
+                target_node = self.find_successor(str(cluster_hash))
+                if target_node not in unique_nodes:
+                    unique_nodes[target_node] = []
+            
+            unique_nodes[target_node].append(cluster_id)
+            
+        # 2. Query each unique target node once
+        for target_node, cluster_ids in unique_nodes.items():
+            if target_node == self.address:
+                for cid in cluster_ids:
+                    print(f" └──> [{self.address}] Serving cluster {cid} from local disk.")
+                    results.extend(self.retrieve_local(cid))
+            else:
+                print(f" └──> [{self.address}] Routing network request for clusters {cluster_ids} to {target_node}...")
                 try:
                     with self._get_rpc_client(target_node) as client:
-                        results.extend(client.retrieve_local(cluster_id))
+                        for cid in cluster_ids:
+                            results.extend(client.retrieve_local(cid))
                 except Exception as e:
-                    print(f"[{self.address}] Failed to fetch cluster {cluster_id} from {target_node}: {e}")
+                    print(f"[{self.address}] Failed to fetch clusters {cluster_ids} from {target_node}: {e}")
         
         # Deduplicate
         unique_results = list(set(results))
@@ -452,7 +489,10 @@ class ChordNode:
         ranked_results.sort(key=lambda x: x[0], reverse=True)
         
         # Return top 5
-        return [c_str for sim, c_str in ranked_results[:5]]
+        final_list = [c_str for sim, c_str in ranked_results[:5]]
+        if return_hops:
+            return final_list, total_hops
+        return final_list
 
     # --- Background Stabilization Protocols ---
 
@@ -573,7 +613,7 @@ class ChordNode:
     # --- Lifecycle Control ---
 
     def start(self):
-        self.server = SimpleXMLRPCServer((self.ip, self.port), logRequests=False, allow_none=True)
+        self.server = ThreadedXMLRPCServer((self.ip, self.port), logRequests=False, allow_none=True)
         self.server.register_instance(self)
         
         self.server_thread = threading.Thread(target=self.server.serve_forever, daemon=True)

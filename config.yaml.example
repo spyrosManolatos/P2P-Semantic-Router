@@ -5,7 +5,7 @@ network:
   default_host: "127.0.0.1"
   default_port: 8001
   timeout_sec: 3.0
-  number_of_nodes: 10
+  number_of_nodes: 5
 
 dht:
   hash_bits_m: 160
@@ -13,10 +13,16 @@ dht:
   stabilize_interval_sec: 0.5
 
 storage:
-  centroids_path: "data/models/centroids.json"
-  data_path: "data/raw/data.json"
-  num_courses: 100
+  centroids:
+    synthetic_path: "data/models/synthetic_centroids.json"
+    kaggle_dataset_path: "data/models/kaggle_centroids.json"
+  data:
+    synthetic_path: "data/raw/synthetic_data.json"
+    kaggle:
+      raw_path: "data/raw/udemy_courses.csv"
+      normalized_path: "data/raw/normalized_kaggle_courses.json"
+  num_courses: 500
   load_threshold: 3
 
 kmeans:
-  clusters: 5
+  clusters: 80

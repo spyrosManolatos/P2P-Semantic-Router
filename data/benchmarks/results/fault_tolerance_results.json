@@ -1,0 +1,20 @@
+{
+    "0% Failure (Healthy)": {
+        "recall": 0.96,
+        "hops": 2.6,
+        "latency": 361.98686539864866,
+        "heal_time_sec": 0.0
+    },
+    "16.7% Failure (1 Node Killed)": {
+        "recall": 0.2,
+        "hops": 0.0,
+        "latency": 70.78813980042469,
+        "heal_time_sec": 0.9873323440551758
+    },
+    "33.3% Failure (2 Nodes Killed)": {
+        "recall": 0.2,
+        "hops": 0.0,
+        "latency": 103.73157379945042,
+        "heal_time_sec": 1.6174161434173584
+    }
+}

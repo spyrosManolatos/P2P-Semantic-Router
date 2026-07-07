@@ -23,7 +23,8 @@ def in_open_range(key: int, a: int, b: int) -> bool:
     return a < key or key < b
 
 class NaiveChordNode:
-    def __init__(self, ip: str, port: int, bootstrap_node: str = None):
+    def __init__(self, ip: str, port: int, bootstrap_node: str = None, dataset: str = "kaggle"):
+        self.dataset = dataset
         self.ip = ip
         self.port = port
         self.address = f"{ip}:{port}"
@@ -42,7 +43,11 @@ class NaiveChordNode:
         
         self.storage = {} # course_hash_str -> [course_json_with_vec]
         
-        self.vocab = self._load_vocab(config['storage']['centroids_path'])
+        if self.dataset == "synthetic":
+            centroids_path = config['storage']['centroids']['synthetic_path']
+        else:
+            centroids_path = config['storage']['centroids']['kaggle_dataset_path']
+        self.vocab = self._load_vocab(centroids_path)
         self.query_load = 0
         
         self.server = ThreadedXMLRPCServer((ip, port), allow_none=True, logRequests=False)
@@ -110,6 +115,19 @@ class NaiveChordNode:
                     return n0.find_successor(str(id_val))
             except:
                 return self.successor
+
+    def find_successor_with_hops(self, id_str: str, hop_count: int = 0) -> List[Any]:
+        id_val = int(id_str)
+        if in_half_open_range(id_val, self.node_id, self.successor_id):
+            return [self.successor, hop_count]
+        else:
+            n0_addr = self.closest_preceding_node(id_val)
+            if n0_addr == self.address: return [self.successor, hop_count]
+            try:
+                with self._get_rpc_client(n0_addr) as n0:
+                    return n0.find_successor_with_hops(str(id_val), hop_count + 1)
+            except:
+                return [self.successor, hop_count]
 
     def closest_preceding_node(self, id_val: int) -> str:
         for i in range(self.m - 1, -1, -1):
@@ -218,8 +236,11 @@ class NaiveChordNode:
         if bootstrap_addr:
             try:
                 with self._get_rpc_client(bootstrap_addr) as bootstrap:
-                    try: self.r = bootstrap.get_replication_factor()
-                    except: pass
+                    try:
+                        self.r = bootstrap.get_replication_factor()
+                        self.rf = self.r
+                    except:
+                        pass
                     succ = bootstrap.find_successor(str(self.node_id))
                 self.successors = [succ]
                 self.finger_table[0] = succ
@@ -284,7 +305,7 @@ class NaiveChordNode:
         # Return local results and the exact NEXT node in the ring (successor)
         return results[:top_k], self.successor
 
-    def get_similar_courses(self, course_json: str, nprobe: int = 1) -> List[str]:
+    def get_similar_courses(self, course_json: str, nprobe: int = 1, return_hops: bool = False) -> Any:
         # Naive GET requires traversing the ENTIRE ring sequentially to guarantee 100% recall
         course = json.loads(course_json)
         text = f"{course['course_title']} {course['category']} {course['description']}"
@@ -345,6 +366,8 @@ class NaiveChordNode:
                 del c["vector"]
             cleaned_list.append(json.dumps(c))
             
+        if return_hops:
+            return cleaned_list, network_hops
         return cleaned_list
 
     def _stabilize_loop(self):

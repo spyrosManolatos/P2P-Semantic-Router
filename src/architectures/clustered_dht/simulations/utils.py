@@ -8,7 +8,7 @@ import random
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 # Add the architecture directory so we can import 'node'
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from node import ChordNode
+from architectures.clustered_dht.node import ChordNode
 from core import config_loader
 
 def print_separator():
@@ -36,15 +36,22 @@ def print_storage_summary(nodes, title="Distributed Storage Summary (Semantic Cl
             print("  [REPLICA DATA] None")
         print("-" * 40)
 
-def load_courses():
+def load_courses(dataset="kaggle"):
     config = config_loader.load_config()
-    synth_data_path = config['storage']['data_path']
-    with open(synth_data_path, "r", encoding="utf-8") as f:
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    if dataset == "synthetic":
+        data_path = os.path.join(project_root, config['storage']['data']['synthetic_path'])
+    else:
+        data_path = os.path.join(project_root, config['storage']['data']['kaggle']['normalized_path'])
+        
+    if not os.path.exists(data_path):
+        data_path = config['storage']['data']['synthetic_path']
+        
+    with open(data_path, "r", encoding="utf-8") as f:
         courses = json.load(f)
-    print(f"Loaded {len(courses)} courses from {synth_data_path}")
+    print(f"Loaded {len(courses)} courses from {data_path}")
     return courses
-
-def setup_network(num_nodes=None, base_port=None, r=None):
+def setup_network(num_nodes=None, base_port=None, r=None, dataset="kaggle"):
     config = config_loader.load_config()
     num_nodes = num_nodes if num_nodes is not None else config['network']['number_of_nodes']
     base_port = base_port if base_port is not None else config['network']['default_port']
@@ -58,7 +65,7 @@ def setup_network(num_nodes=None, base_port=None, r=None):
     nodes = []
 
     # 1. Spawn and start the Bootstrap Node
-    bootstrap_node = ChordNode(base_ip, base_port, r=r)
+    bootstrap_node = ChordNode(base_ip, base_port, r=r, dataset=dataset)
     bootstrap_node.start()
     print("Forming Chord Ring with Bootstrap Node...")
     bootstrap_node.join(None)
@@ -70,7 +77,7 @@ def setup_network(num_nodes=None, base_port=None, r=None):
     for i in range(1, num_nodes):
         time.sleep(0.5)
         # Notice we do NOT pass 'r' here. The node must learn it via join()
-        node = ChordNode(base_ip, base_port + i)
+        node = ChordNode(base_ip, base_port + i, dataset=dataset)
         node.start()
         node.join(bootstrap_addr)
         nodes.append(node)
