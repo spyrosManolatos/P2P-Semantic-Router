@@ -8,40 +8,46 @@ All evaluations are conducted using subsets of the **Kaggle Udemy Courses Datase
 
 ## 🛠️ Dataset and Script Parameters
 
-To replicate any of the evaluations, run the corresponding scripts from the root directory with the exact parameters listed below:
+To replicate any of the evaluations, run the unified evaluation script `evaluate.py` from the root directory with the appropriate mode:
 
-### 1. Scaled Evaluation Comparison (`run_benchmarks.py`)
+### 1. Scaled Evaluation Comparison
 Compares Standard DHT, Clustered DHT, and Semantic Router across multiple nprobe settings.
 - **Dataset:** Kaggle Udemy Courses (subset: 2,000 courses).
 - **Execution Command:**
   ```bash
-  python3 src/benchmarks/run_benchmarks.py --dataset kaggle --num_nodes 6 --num_clusters 80 --queries 5 --dataset_size 2000
-  python3 src/benchmarks/plotter.py
+  python3 src/benchmarks/evaluate.py --mode scale --dataset_size 2000
   ```
 
-### 2. Fault Tolerance Evaluation (`run_fault_tolerance_benchmarks.py`)
+### 2. Fault Tolerance Evaluation
 Evaluates Semantic Router resilience by dynamically killing nodes in a stabilized ring.
 - **Dataset:** Kaggle Udemy Courses (subset: 500 courses).
 - **Execution Command:**
   ```bash
-  python3 src/benchmarks/run_fault_tolerance_benchmarks.py --dataset kaggle --num_nodes 6 --replication_factor 3 --queries 5 --dataset_size 500 --nprobe 2
+  python3 src/benchmarks/evaluate.py --mode fault --replication_factor 3
   ```
 
-### 3. Dynamic Node Join Evaluation (`run_node_join_benchmarks.py`)
+### 3. Dynamic Node Join Evaluation
 Evaluates data migration and stabilization times when expanding a running network.
 - **Dataset:** Kaggle Udemy Courses (subset: 500 courses).
 - **Execution Command:**
   ```bash
-  python3 src/benchmarks/run_node_join_benchmarks.py --dataset kaggle --num_nodes 5 --replication_factor 3 --queries 5 --dataset_size 500 --nprobe 2
+  python3 src/benchmarks/evaluate.py --mode join --replication_factor 3
   ```
 
-### 4. Active Load Balancing Evaluation (`run_load_balancing_benchmarks.py`)
+### 4. Active Load Balancing Evaluation
 Measures average query latency under different concurrent request workloads, comparing delegation-enabled vs delegation-disabled states.
 - **Dataset:** Kaggle Udemy Courses (subset: 500 courses).
 - **Execution Command:**
   ```bash
-  python3 src/benchmarks/run_load_balancing_benchmarks.py --dataset kaggle --num_nodes 6 --replication_factor 3 --dataset_size 500 --nprobe 2
+  python3 src/benchmarks/evaluate.py --mode load --replication_factor 3
   ```
+
+---
+
+To generate and update all plots after running evaluations, run:
+```bash
+python3 src/benchmarks/plot.py
+```
 
 ---
 
