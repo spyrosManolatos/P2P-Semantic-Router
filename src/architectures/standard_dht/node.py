@@ -236,8 +236,11 @@ class NaiveChordNode:
         if bootstrap_addr:
             try:
                 with self._get_rpc_client(bootstrap_addr) as bootstrap:
-                    try: self.r = bootstrap.get_replication_factor()
-                    except: pass
+                    try:
+                        self.r = bootstrap.get_replication_factor()
+                        self.rf = self.r
+                    except:
+                        pass
                     succ = bootstrap.find_successor(str(self.node_id))
                 self.successors = [succ]
                 self.finger_table[0] = succ

@@ -354,6 +354,7 @@ class ChordNode:
                 with self._get_rpc_client(bootstrap_addr) as bootstrap:
                     try:
                         self.r = bootstrap.get_replication_factor()
+                        self.rf = self.r
                     except Exception:
                         pass
                     succ = bootstrap.find_successor(str(self.node_id))
