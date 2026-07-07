@@ -110,6 +110,12 @@ _(You can run identical simulation scripts located inside the `src/architectures
 
 To evaluate the empirical trade-offs of the system, this project includes a benchmarking suite (`src/benchmarks/run_benchmarks.py`) that tests the architectures at scale (e.g., 2,000 courses, 6 nodes, 80 clusters, testing multiple `nprobe` levels).
 
+**To run the benchmarks and generate the charts yourself:**
+```bash
+python3 src/benchmarks/run_benchmarks.py --dataset kaggle --num_nodes 6 --num_clusters 80 --queries 5 --dataset_size 2000
+python3 src/benchmarks/plotter.py
+```
+
 The automated scripts measure and plot:
 - **Search Recall:** Accuracy against a monolithic exact-KNN baseline.
 - **Network Hops:** Routing overhead and the impact of target node deduplication.
@@ -123,11 +129,9 @@ The automated scripts measure and plot:
 
 As the core architectures of the P2P Semantic Router and its baselines are established, future development will focus on rigorous evaluation and deployment realism:
 
-1. **Comprehensive Benchmarking:**
-   - **Recall:** Evaluating the accuracy of distributed similarity searches against the monolithic baseline.
-   - **Network Hops:** Profiling the routing efficiency and the impact of the `nprobe` fanout mechanism.
-   - **Latency:** Measuring end-to-end query resolution times under various network sizes.
+1. **High Node Churn & Resilience Testing (Fault Tolerance):**
+   - Evaluating the system under high node churn. If 20% of the network nodes randomly crash or disconnect during a query, does the semantic router still maintain its high recall via replica data?
+   - Profiling the mathematical impact of node failures and Ring Stabilization algorithms on query latency and network hop counts.
 
-3. **Containerization & Distributed Simulation:**
-   - Packaging nodes into isolated Docker containers.
-   - Using Docker Compose to orchestrate realistic network topologies, allowing for the simulation of network latency, partition events, and resource constraints in a true distributed environment.
+2. **Containerization & Distributed Deployment:**
+   - Packaging nodes into isolated Docker containers (e.g., via Kubernetes or Docker Swarm) to introduce real-world network latency, physical bandwidth constraints, and large scale (1,000+ nodes) empirical testing over cloud regions.
