@@ -146,6 +146,21 @@ Once concurrency reaches 16 simultaneous queries, the performance gain stabilize
 
 ---
 
+## 📊 The Kaggle Dataset & Fixed Query Set
+
+To ensure perfectly fair, "apples-to-apples" comparisons across all three architectures, the benchmarks inject **500 Udemy courses sourced from Kaggle**. This dataset is passed through a unified preprocessing script to enforce a standard schema (Title, Description, Category).
+
+During evaluation, the architectures are tested using a fixed set of **5 representative queries**:
+1. *"Build Web Apps with Vue JS 3 & Firebase Development Learn Vue JS 3 & Firebase..."*
+2. *"Go: The Complete Developer's Guide (Golang) Development Master the fundamentals..."*
+3. *"Automate the Boring Stuff with Python Programming Development A practical programming course..."*
+4. *"Java Spring Tutorial Masterclass - Learn Spring Framework 5 Development Can't Find a good..."*
+5. *"The Complete Android Oreo Developer Course - Build 23 Apps! Development Learn Android O..."*
+
+These queries are used consistently across all benchmarks (Scaling, Load Balancing, Fault Tolerance, Disaster Scenario) to guarantee that any variance in Recall, Latency, or Network Hops is purely a result of the underlying architectural topology, not the data itself.
+
+---
+
 ## 🐳 Containerized Environment Results (True Network Emulation)
 
 The local metrics above (latency/hops) were measured using Python threading on a loopback interface (`localhost`). To eliminate local threading biases (like Python's Global Interpreter Lock) and simulate true cross-network RPC communication, we executed the identical benchmark suite across isolated Docker bridge networks using `containerized_environment/`. 

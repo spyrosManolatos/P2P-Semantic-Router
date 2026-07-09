@@ -54,6 +54,16 @@ This repository implements and compares four different architectural approaches 
 
 ---
 
+## 🏗️ The Data Pipeline & Kaggle Dataset
+
+The system is tested using a real-world dataset of Udemy courses sourced from Kaggle. To ensure fair and consistent evaluation across all architectures, the raw data is passed through a unified preprocessing schema before being injected into the P2P network.
+
+1. **Preprocessing (`src/ml/train_centroids.py` / Data Loaders):** The raw Kaggle dataset is parsed, and course titles, descriptions, and categories are unified into a standard schema.
+2. **Feature Extraction:** The text is vectorized using TF-IDF (L2 Normalized) to represent the semantic meaning of the courses.
+3. **Clustering:** A standard K-Means model (k=50) is trained to group the vectors into semantic clusters, creating the `centroids.json` model that the DHT nodes will use to map data.
+
+---
+
 ## 🔑 Key Architectural Features
 
 1. **Semantic Centroid Routing:** Nodes automatically vectorize raw text using TF-IDF and route the data to the correct cluster ID on the DHT ring.
