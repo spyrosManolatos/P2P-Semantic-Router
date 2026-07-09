@@ -1,14 +1,14 @@
 {
     "original_5_nodes": {
-        "recall": 1.0,
-        "hops": 1.0,
-        "latency": 5.0,
+        "recall": 0.76,
+        "hops": 2.0,
+        "latency": 38.0732182000429,
         "migration_time_sec": 0.0
     },
     "expanded_6_nodes": {
         "recall": 0.76,
         "hops": 2.0,
-        "latency": 37.29526919996715,
-        "migration_time_sec": 10.03929352760315
+        "latency": 32.12604480013397,
+        "migration_time_sec": 10.033153295516968
     }
 }

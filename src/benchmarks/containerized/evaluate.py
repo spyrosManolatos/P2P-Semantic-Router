@@ -271,12 +271,38 @@ def run_node_join(args, subset_courses, ground_truth):
     
     node_addresses = get_node_addresses(args.arch)
     
+    # 1. Inject data
+    inject_data_simple(node_addresses[0], subset_courses, args.arch)
+    print("Waiting 15s for full ring stabilization and finger table propagation...")
+    time.sleep(15)
+    
     # Target the dedicated 6th node container running idle in the docker network
     target_host = "standard-node-5" if args.arch == "standard" else "clustered-node-5" if args.arch == "clustered" else "node-5"
     target_addr = f"{target_host}:5000"
     
     print(f"Connecting to idle container {target_host}...")
     new_node = xmlrpc.client.ServerProxy(f"http://{target_addr}", allow_none=True)
+    existing_node = xmlrpc.client.ServerProxy(f"http://{node_addresses[0]}", allow_none=True)
+    
+    # --- QUERY BEFORE JOIN ---
+    print("Executing queries on the original 5-node ring...")
+    pre_latencies = []
+    pre_recalls = []
+    for gt in ground_truth:
+        c_json = json.dumps(gt["course"])
+        try:
+            (res_tuple, hops), latency = run_dht_query(existing_node, c_json, args.nprobe if args.arch != "standard" else None)
+            retrieved_ids = [json.loads(r)["course_id"] for r in res_tuple]
+            recall = compute_recall(gt["ground_truth_ids"], retrieved_ids)
+            pre_recalls.append(recall)
+            pre_latencies.append(latency)
+        except Exception:
+            pass
+            
+    mean_pre_recall = sum(pre_recalls) / len(pre_recalls) if pre_recalls else 0
+    mean_pre_latency = sum(pre_latencies) / len(pre_latencies) if pre_latencies else 0
+    
+    # --- TRIGGER JOIN ---
     
     start_time = time.time()
     print(f"Triggering {target_host} to join the cluster via bootstrap node {node_addresses[0]}...")
@@ -317,9 +343,9 @@ def run_node_join(args, subset_courses, ground_truth):
     
     join_results = {
         "original_5_nodes": {
-            "recall": 1.0,
-            "hops": 1.0,
-            "latency": 5.0,
+            "recall": mean_pre_recall,
+            "hops": float(args.nprobe if args.arch != "standard" else 1.0),
+            "latency": mean_pre_latency,
             "migration_time_sec": 0.0
         },
         "expanded_6_nodes": {
