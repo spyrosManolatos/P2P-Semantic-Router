@@ -15,9 +15,9 @@ plt.rcParams.update({
     'font.family': 'sans-serif'
 })
 
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-results_dir = os.path.join(project_root, "data", "benchmarks", "results")
-plots_dir = os.path.join(project_root, "data", "benchmarks", "plots")
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+results_dir = os.path.join(project_root, "data", "benchmarks", "results", "local")
+plots_dir = os.path.join(project_root, "data", "benchmarks", "plots", "local")
 
 def plot_scale():
     results_path = os.path.join(results_dir, "results.json")

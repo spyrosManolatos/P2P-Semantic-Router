@@ -50,7 +50,11 @@ class NaiveChordNode:
         self.vocab = self._load_vocab(centroids_path)
         self.query_load = 0
         
-        self.server = ThreadedXMLRPCServer((ip, port), allow_none=True, logRequests=False)
+        # Bind to 0.0.0.0 for external access in containerized environments (unless localhost/127.0.0.1)
+        bind_ip = ip
+        if ip not in ["127.0.0.1", "localhost"]:
+            bind_ip = "0.0.0.0"
+        self.server = ThreadedXMLRPCServer((bind_ip, port), allow_none=True, logRequests=False)
         self.server.register_instance(self)
         
         self.running = True

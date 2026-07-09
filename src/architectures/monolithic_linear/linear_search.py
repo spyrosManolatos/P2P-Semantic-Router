@@ -26,7 +26,7 @@ def vectorize(text, vocab):
     return vec
 
 class MonolithicSearcher:
-    def __init__(self, dataset="kaggle"):
+    def __init__(self, dataset="kaggle", limit=None):
         config = load_config()
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         
@@ -43,6 +43,9 @@ class MonolithicSearcher:
 
         with open(data_path, 'r', encoding='utf-8') as f:
             self.courses = json.load(f)
+            
+        if limit is not None:
+            self.courses = self.courses[:limit]
             
         self.vocab = load_vocab(centroids_path)
         print(f"[Monolithic Baseline] Loaded {len(self.courses)} courses from: {data_path}")

@@ -1,0 +1,82 @@
+services:
+  standard-bootstrap:
+    build:
+      context: ../..
+      dockerfile: containerized_environment/Dockerfile
+    image: p2p-semantic-router:latest
+    container_name: standard-bootstrap
+    command: ["--arch", "standard", "--ip", "standard-bootstrap", "--port", "5000"]
+    ports:
+      - "8101:5000"
+    volumes:
+      - ../../data:/app/data
+
+  standard-node-1:
+    image: p2p-semantic-router:latest
+    container_name: standard-node-1
+    command: ["--arch", "standard", "--ip", "standard-node-1", "--port", "5000", "--bootstrap", "standard-bootstrap:5000"]
+    depends_on:
+      - standard-bootstrap
+    ports:
+      - "8102:5000"
+    volumes:
+      - ../../data:/app/data
+
+  standard-node-2:
+    image: p2p-semantic-router:latest
+    container_name: standard-node-2
+    command: ["--arch", "standard", "--ip", "standard-node-2", "--port", "5000", "--bootstrap", "standard-bootstrap:5000"]
+    depends_on:
+      - standard-bootstrap
+    ports:
+      - "8103:5000"
+    volumes:
+      - ../../data:/app/data
+
+  standard-node-3:
+    image: p2p-semantic-router:latest
+    container_name: standard-node-3
+    command: ["--arch", "standard", "--ip", "standard-node-3", "--port", "5000", "--bootstrap", "standard-bootstrap:5000"]
+    depends_on:
+      - standard-bootstrap
+    ports:
+      - "8104:5000"
+    volumes:
+      - ../../data:/app/data
+
+  standard-node-4:
+    image: p2p-semantic-router:latest
+    container_name: standard-node-4
+    command: ["--arch", "standard", "--ip", "standard-node-4", "--port", "5000", "--bootstrap", "standard-bootstrap:5000"]
+    depends_on:
+      - standard-bootstrap
+    ports:
+      - "8105:5000"
+    volumes:
+      - ../../data:/app/data
+
+  standard-node-5:
+    image: p2p-semantic-router:latest
+    container_name: standard-node-5
+    command: ["--arch", "standard", "--ip", "standard-node-5", "--port", "5000"]
+    ports:
+      - "8106:5000"
+    volumes:
+      - ../../data:/app/data
+
+  standard-runner:
+    image: p2p-semantic-router:latest
+    container_name: standard-runner
+    profiles:
+      - runner
+    depends_on:
+      - standard-bootstrap
+      - standard-node-1
+      - standard-node-2
+      - standard-node-3
+      - standard-node-4
+      - standard-node-5
+    volumes:
+      - ../../data:/app/data
+      - ../../src:/app/src
+    entrypoint: ["python", "-m", "src.benchmarks.containerized.evaluate", "--arch", "standard", "--mode", "all", "--num_nodes", "5"]

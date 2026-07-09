@@ -1,0 +1,14 @@
+{
+    "baseline": {
+        "recall": 1.0,
+        "hops": 1.0,
+        "latency": 185.7650216001275,
+        "heal_time_sec": 0.0
+    },
+    "after_failure": {
+        "recall": 0.6,
+        "hops": 2,
+        "latency": 89.75704120002774,
+        "heal_time_sec": 11.069695234298706
+    }
+}

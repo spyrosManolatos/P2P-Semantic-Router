@@ -1,0 +1,82 @@
+services:
+  bootstrap-node:
+    build:
+      context: ../..
+      dockerfile: containerized_environment/Dockerfile
+    image: p2p-semantic-router:latest
+    container_name: bootstrap-node
+    command: ["--arch", "semantic", "--ip", "bootstrap-node", "--port", "5000"]
+    ports:
+      - "8001:5000"
+    volumes:
+      - ../../data:/app/data
+
+  node-1:
+    image: p2p-semantic-router:latest
+    container_name: node-1
+    command: ["--arch", "semantic", "--ip", "node-1", "--port", "5000", "--bootstrap", "bootstrap-node:5000"]
+    depends_on:
+      - bootstrap-node
+    ports:
+      - "8002:5000"
+    volumes:
+      - ../../data:/app/data
+
+  node-2:
+    image: p2p-semantic-router:latest
+    container_name: node-2
+    command: ["--arch", "semantic", "--ip", "node-2", "--port", "5000", "--bootstrap", "bootstrap-node:5000"]
+    depends_on:
+      - bootstrap-node
+    ports:
+      - "8003:5000"
+    volumes:
+      - ../../data:/app/data
+
+  node-3:
+    image: p2p-semantic-router:latest
+    container_name: node-3
+    command: ["--arch", "semantic", "--ip", "node-3", "--port", "5000", "--bootstrap", "bootstrap-node:5000"]
+    depends_on:
+      - bootstrap-node
+    ports:
+      - "8004:5000"
+    volumes:
+      - ../../data:/app/data
+
+  node-4:
+    image: p2p-semantic-router:latest
+    container_name: node-4
+    command: ["--arch", "semantic", "--ip", "node-4", "--port", "5000", "--bootstrap", "bootstrap-node:5000"]
+    depends_on:
+      - bootstrap-node
+    ports:
+      - "8005:5000"
+    volumes:
+      - ../../data:/app/data
+
+  node-5:
+    image: p2p-semantic-router:latest
+    container_name: node-5
+    command: ["--arch", "semantic", "--ip", "node-5", "--port", "5000"]
+    ports:
+      - "8006:5000"
+    volumes:
+      - ../../data:/app/data
+
+  semantic-runner:
+    image: p2p-semantic-router:latest
+    container_name: semantic-runner
+    profiles:
+      - runner
+    depends_on:
+      - bootstrap-node
+      - node-1
+      - node-2
+      - node-3
+      - node-4
+      - node-5
+    volumes:
+      - ../../data:/app/data
+      - ../../src:/app/src
+    entrypoint: ["python", "-m", "src.benchmarks.containerized.evaluate", "--arch", "semantic", "--mode", "all", "--num_nodes", "5"]

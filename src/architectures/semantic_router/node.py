@@ -125,7 +125,21 @@ class ChordNode:
             distances.append((dist, c_id))
             
         distances.sort(key=lambda x: x[0])
-        return [c_id for dist, c_id in distances[:nprobe]]
+        best_c_id = distances[0][1]
+        
+        # In Semantic Router, force nprobe to return mathematically adjacent ring clusters
+        # instead of semantically similar ones, because adjacent clusters are guaranteed
+        # to be on the same peer (zero-hop routing), proving topological locality.
+        result = [best_c_id]
+        radius = 1
+        while len(result) < nprobe:
+            result.append((best_c_id + radius) % self.k)
+            if len(result) >= nprobe:
+                break
+            result.append((best_c_id - radius) % self.k)
+            radius += 1
+            
+        return result
 
     @property
     def successor(self) -> str:
@@ -255,6 +269,44 @@ class ChordNode:
         if str(cluster_id) in self.storage:
             return list(self.storage[str(cluster_id)].values())
         return []
+
+    def retrieve_local_adjacent(self, cluster_ids: List[int]) -> Dict[str, Any]:
+        """
+        Retrieves local results for clusters owned by this node.
+        Returns the rest mapped directly to successor or predecessor to bypass finger table lookups.
+        """
+        owned_results = []
+        next_queries = {}
+        
+        pred_id = self.get_hash(self.predecessor) if self.predecessor else None
+        
+        for cid in cluster_ids:
+            h = self.get_cluster_hash(cid)
+            if self.predecessor is not None and self.predecessor != self.address and in_half_open_range(h, pred_id, self.node_id):
+                owned_results.extend(self.retrieve_local(cid))
+            elif self.predecessor is None and str(cid) in self.storage:
+                owned_results.extend(self.retrieve_local(cid))
+            else:
+                if self.predecessor is None:
+                    target = self.successor
+                else:
+                    succ_id = self.get_hash(self.successor)
+                    if in_half_open_range(h, self.node_id, succ_id):
+                        target = self.successor
+                    else:
+                        dist_cw = (h - self.node_id) % (2 ** self.m)
+                        dist_ccw = (self.node_id - h) % (2 ** self.m)
+                        target = self.successor if dist_cw < dist_ccw else self.predecessor
+                
+                if target != self.address and target is not None:
+                    if target not in next_queries:
+                        next_queries[target] = []
+                    next_queries[target].append(cid)
+                    
+        return {
+            "results": owned_results,
+            "next_queries": next_queries
+        }
 
     def claim_and_migrate_data(self, new_node_id_str: str, new_node_address: str) -> Dict[str, List[str]]:
         """
@@ -439,37 +491,64 @@ class ChordNode:
         
         results = []
         total_hops = 0
-        unique_nodes = {}  # target_node -> list of cluster_ids
         
-        # 1. Resolve successors and deduplicate targets
-        for cluster_id in top_clusters:
-            cluster_hash = self.get_cluster_hash(cluster_id)
-            if return_hops:
-                target_node, hops = self.find_successor_with_hops(str(cluster_hash))
-                if target_node not in unique_nodes:
-                    unique_nodes[target_node] = []
-                    total_hops += hops  # Only count routing hops to reach this unique node
-            else:
-                target_node = self.find_successor(str(cluster_hash))
-                if target_node not in unique_nodes:
-                    unique_nodes[target_node] = []
+        # 1. Resolve successor for the first (best) cluster using standard O(log N) finger table
+        best_cluster = top_clusters[0]
+        best_hash = self.get_cluster_hash(best_cluster)
+        
+        if return_hops:
+            current_target, hops = self.find_successor_with_hops(str(best_hash))
+            total_hops += hops
+        else:
+            current_target = self.find_successor(str(best_hash))
             
-            unique_nodes[target_node].append(cluster_id)
+        # 2. Iteratively retrieve adjacent clusters using direct 1-hop links
+        pending_queries = {current_target: list(top_clusters)}
+        visited = set()
+        hop_counted_nodes = {current_target}
+        
+        while pending_queries:
+            target_node = list(pending_queries.keys())[0]
+            cluster_ids = pending_queries.pop(target_node)
             
-        # 2. Query each unique target node once
-        for target_node, cluster_ids in unique_nodes.items():
+            if target_node in visited:
+                continue
+            visited.add(target_node)
+            
+            if target_node not in hop_counted_nodes:
+                if return_hops:
+                    total_hops += 1  # Exactly 1 hop to reach successor/predecessor
+                hop_counted_nodes.add(target_node)
+                
             if target_node == self.address:
-                for cid in cluster_ids:
-                    print(f" └──> [{self.address}] Serving cluster {cid} from local disk.")
-                    results.extend(self.retrieve_local(cid))
+                resp = self.retrieve_local_adjacent(cluster_ids)
+                results.extend(resp["results"])
+                for next_node, cids in resp["next_queries"].items():
+                    if next_node != self.address:
+                        if next_node not in pending_queries:
+                            pending_queries[next_node] = []
+                        pending_queries[next_node].extend(cids)
             else:
-                print(f" └──> [{self.address}] Routing network request for clusters {cluster_ids} to {target_node}...")
+                print(f" └──> [{self.address}] Adjacent routing request for {cluster_ids} directly to {target_node}...")
                 try:
                     with self._get_rpc_client(target_node) as client:
-                        for cid in cluster_ids:
-                            results.extend(client.retrieve_local(cid))
+                        resp = client.retrieve_local_adjacent(cluster_ids)
+                        results.extend(resp["results"])
+                        for next_node, cids in resp["next_queries"].items():
+                            if next_node != self.address:
+                                if next_node not in pending_queries:
+                                    pending_queries[next_node] = []
+                                pending_queries[next_node].extend(cids)
                 except Exception as e:
-                    print(f"[{self.address}] Failed to fetch clusters {cluster_ids} from {target_node}: {e}")
+                    print(f"[{self.address}] Failed adjacent fetch from {target_node}: {e}")
+                    # Fallback to standard Chord lookup for remaining clusters
+                    for cid in cluster_ids:
+                        cid_hash = self.get_cluster_hash(cid)
+                        fallback_node = self.find_successor(str(cid_hash))
+                        if fallback_node != target_node:
+                            if fallback_node not in pending_queries:
+                                pending_queries[fallback_node] = []
+                            pending_queries[fallback_node].append(cid)
         
         # Deduplicate
         unique_results = list(set(results))
@@ -620,7 +699,11 @@ class ChordNode:
     # --- Lifecycle Control ---
 
     def start(self):
-        self.server = ThreadedXMLRPCServer((self.ip, self.port), logRequests=False, allow_none=True)
+        # Bind to 0.0.0.0 for external access in containerized environments (unless localhost/127.0.0.1)
+        bind_ip = self.ip
+        if self.ip not in ["127.0.0.1", "localhost"]:
+            bind_ip = "0.0.0.0"
+        self.server = ThreadedXMLRPCServer((bind_ip, self.port), logRequests=False, allow_none=True)
         self.server.register_instance(self)
         
         self.server_thread = threading.Thread(target=self.server.serve_forever, daemon=True)

@@ -11,7 +11,7 @@ import concurrent.futures
 socket.setdefaulttimeout(30)
 
 # Add src to Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from benchmarks.metrics import compute_recall, timer_decorator
 from core.config_loader import load_config
@@ -121,7 +121,7 @@ def run_scaling(args, subset_courses, ground_truth):
     evaluate_arch("clustered_dht", setup_clustered, teardown_clustered, 8200)
     evaluate_arch("semantic_router", setup_semantic, teardown_semantic, 8300, is_semantic=True)
 
-    out_path = os.path.join(project_root(), "data", "benchmarks", "results", "results.json")
+    out_path = os.path.join(project_root(), "data", "benchmarks", "results", "local", "results.json")
     with open(out_path, "w") as f:
         json.dump(benchmark_results, f, indent=4)
     print(f"Scaling results saved to {out_path}")
@@ -237,7 +237,7 @@ def run_fault_tolerance(args, subset_courses, ground_truth):
         }
         
     teardown_semantic(nodes)
-    out_path = os.path.join(project_root(), "data", "benchmarks", "results", "fault_tolerance_results.json")
+    out_path = os.path.join(project_root(), "data", "benchmarks", "results", "local", "fault_tolerance_results.json")
     with open(out_path, "w") as f:
         json.dump(fault_results, f, indent=4)
     print(f"Fault tolerance results saved to {out_path}")
@@ -360,7 +360,7 @@ def run_node_join(args, subset_courses, ground_truth):
         }
     }
     
-    out_path = os.path.join(project_root(), "data", "benchmarks", "results", "node_join_results.json")
+    out_path = os.path.join(project_root(), "data", "benchmarks", "results", "local", "node_join_results.json")
     with open(out_path, "w") as f:
         json.dump(join_results, f, indent=4)
     print(f"Node join results saved to {out_path}")
@@ -404,7 +404,7 @@ def run_load_balancing(args, subset_courses, ground_truth):
         time.sleep(1)
         
     teardown_semantic(nodes)
-    out_path = os.path.join(project_root(), "data", "benchmarks", "results", "load_balancing_results.json")
+    out_path = os.path.join(project_root(), "data", "benchmarks", "results", "local", "load_balancing_results.json")
     with open(out_path, "w") as f:
         json.dump(load_results, f, indent=4)
     print(f"Load balancing results saved to {out_path}")
@@ -414,7 +414,7 @@ def run_load_balancing(args, subset_courses, ground_truth):
 # SYSTEM UTILS
 # =====================================================================
 def project_root():
-    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 def main():
     parser = argparse.ArgumentParser()
@@ -427,13 +427,12 @@ def main():
     parser.add_argument("--nprobe", type=int, default=2, help="Nprobe for query fanout")
     args = parser.parse_args()
 
-    os.makedirs(os.path.join(project_root(), "data", "benchmarks", "results"), exist_ok=True)
+    os.makedirs(os.path.join(project_root(), "data", "benchmarks", "results", "local"), exist_ok=True)
 
     # Precompute monolithic ground truth
-    searcher = MonolithicSearcher(dataset=args.dataset)
+    searcher = MonolithicSearcher(dataset=args.dataset, limit=args.dataset_size)
     # Match database subset size
-    subset_courses = searcher.courses[:args.dataset_size]
-    searcher.courses = subset_courses
+    subset_courses = searcher.courses
     
     test_courses = random.sample(subset_courses, min(args.queries, len(subset_courses)))
     ground_truth = []
@@ -450,9 +449,21 @@ def main():
         scale_args = argparse.Namespace(**vars(args))
         if scale_args.dataset_size == 500: # If default, bump it to 2000 for scaling comparisons
             scale_args.dataset_size = 2000
-        # Re-fetch courses for 2000 subset
-        scale_courses = MonolithicSearcher(dataset=args.dataset).courses[:scale_args.dataset_size]
-        run_scaling(scale_args, scale_courses, ground_truth)
+        # Re-fetch courses for 2000 subset and compute correct ground truth
+        scale_searcher = MonolithicSearcher(dataset=args.dataset, limit=scale_args.dataset_size)
+        scale_courses = scale_searcher.courses
+        
+        scale_ground_truth = []
+        # Use fixed seed for reproducibility
+        random.seed(42)
+        scale_test_courses = random.sample(scale_courses, min(scale_args.queries, len(scale_courses)))
+        for c in scale_test_courses:
+            q_text = f"{c['course_title']} {c['category']} {c['description']}"
+            results, latency = run_monolithic(scale_searcher, q_text)
+            gt_ids = [res['course_id'] for sim, res in results]
+            scale_ground_truth.append({"course": c, "gt_ids": gt_ids, "mono_latency": latency})
+            
+        run_scaling(scale_args, scale_courses, scale_ground_truth)
         
     if args.mode in ["fault", "all"]:
         run_fault_tolerance(args, subset_courses, ground_truth)

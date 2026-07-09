@@ -9,21 +9,36 @@ Unlike traditional categorical DHTs that rely on random SHA-1 hashing, this arch
 ```text
 ├── data/                      # Database and results storage
 │   ├── benchmarks/            # Evaluation results and documentation
-│   │   ├── plots/             # Rendered evaluation charts (PNG)
-│   │   ├── results/           # Raw collected metric data (JSON)
+│   │   ├── plots/             # Rendered charts (PNG)
+│   │   │   ├── local/         # Local simulation plots
+│   │   │   └── containerized/ # Containerized cluster plots
+│   │   ├── results/           # Raw collected metrics (JSON)
+│   │   │   ├── local/         # Local simulation JSON results
+│   │   │   └── containerized/ # Containerized cluster JSON results
 │   │   └── README.md          # Benchmark results analysis report
 │   ├── models/                # Trained K-Means centroids and TF-IDF artifacts
 │   └── raw/                   # Udemy Kaggle CSV dataset and normalized JSON payloads
 ├── src/                       # Database source code
-│   ├── architectures/         # Database topologies and simulations
+│   ├── architectures/         # Database topologies
 │   │   ├── monolithic_linear/ # Centralized exhaustive KNN baseline
 │   │   ├── standard_dht/      # Standard random-hash Chord DHT ring
 │   │   ├── clustered_dht/     # Hashed K-Means clusters DHT ring
 │   │   └── semantic_router/   # Mapped Agglomerative semantic Chord ring (Proposed)
 │   ├── benchmarks/            # Scalability, fault-tolerance, and load-balancing benchmarks
+│   │   ├── local/             # Local simulation evaluation scripts
+│   │   ├── containerized/     # Containerized cluster evaluation scripts
+│   │   └── metrics.py         # Shared evaluation metrics library
 │   ├── core/                  # Decoupled config loader and shared core utilities
 │   ├── ml/                    # ML clustering and vocabulary training pipeline
 │   └── scripts/               # Kaggle csv normalizer and synthetic course generators
+├── local_simulation/          # Local Threaded Simulation environment configuration & scripts
+│   ├── run_simulation.py      # Simulation runner (scenario CLI)
+│   └── config.local.yaml      # Configuration for local simulation run
+├── containerized_environment/ # Distributed Containerized environment configuration & files
+│   ├── Dockerfile             # Node container definition
+│   ├── docker-compose.yml     # Distributed cluster setup and client runner
+│   ├── app.py                 # Node service launcher
+│   └── config.prod.yaml       # Configuration for Docker production run
 ├── config.yaml                # Decoupled network and database parameters file
 └── README.md                  # Main project overview and run instructions
 ```
@@ -98,80 +113,170 @@ python3 src/ml/train_centroids.py
 
 ## 🧪 Running the Simulations
 
-To mathematically prove the architecture, the project includes isolated simulation scripts for each architecture. These scripts will read `config.yaml`, spin up a local P2P network (e.g., 10 nodes), inject the dataset, execute tests, and gracefully shut down.
+The local threaded simulation environment runs multiple ChordNode instances inside the same Python process on loopback IP (`127.0.0.1`) separated by ports. All local simulations are consolidated into a clean CLI interface.
 
-Run these commands from the root directory to test the **Semantic Router**:
+To run the local simulation scenarios, execute the following from the project root:
 
-**Simulation 1: Semantic Routing & KNN**
-Proves the non-random ring mapping and the distributed Cosine Similarity top-5 ranking.
+*   **Scenario 1: Semantic Routing & KNN**
+    Proves the non-random ring mapping and the distributed Cosine Similarity search:
+    ```bash
+    python3 local_simulation/run_simulation.py --scenario routing
+    ```
+
+*   **Scenario 2: Fault Tolerance & Self-Healing**
+    Simulates node crashes, proving that replication recovery and successor healing work:
+    ```bash
+    python3 local_simulation/run_simulation.py --scenario failure
+    ```
+
+*   **Scenario 3: Replica CPU Load Balancing**
+    Blasts a specific node with concurrent queries, proving active replica delegation:
+    ```bash
+    python3 local_simulation/run_simulation.py --scenario load_balancing
+    ```
+
+*   **Scenario 4: Dynamic Node Join**
+    Joins a new node to the active network, proving automatic data migration:
+    ```bash
+    python3 local_simulation/run_simulation.py --scenario join
+    ```
+
+*   **Boot Network Only:**
+    Boots up the network and keeps it active for manual XML-RPC queries:
+    ```bash
+    python3 local_simulation/run_simulation.py --scenario boot
+    ```
+
+---
+
+## 🐳 Running in Containerized Environment (Docker)
+
+To test the P2P Vector Database under real network isolation, isolated Dockerized cluster configurations are provided under separate folders in `containerized_environment/`. 
+
+Each directory contains its own `docker-compose.yml` file, which spins up a dedicated cluster and automatically sets up an isolated Docker bridge network (e.g. `standard_dht_default`, `semantic_router_default`), ensuring complete routing isolation between architecture tests.
+
+### 1. Build Node Container Image
+You can build the shared `p2p-semantic-router` Docker image from any of the folders:
 ```bash
-python3 src/architectures/semantic_router/simulations/01_semantic_routing.py
+cd containerized_environment/semantic_router
+docker compose build
 ```
 
-**Simulation 2: Fault Tolerance**
-Proves standard DHT self-healing. Kills a node abruptly and verifies that the successor recovers the ring.
-```bash
-python3 src/architectures/semantic_router/simulations/02_node_failure.py
-```
+### 2. Orchestrate Distributed Clusters (By Architecture)
+Navigate to the targeted subfolder and launch the 5-node Chord ring (1 bootstrap node, 4 worker nodes) in the background:
 
-**Simulation 3: Active Replica CPU Delegation**
-Proves the hot-spot load balancer. Blasts a specific cluster with rapid-fire queries and verifies that the Primary node successfully delegates the traffic to its successor.
-```bash
-python3 src/architectures/semantic_router/simulations/03_load_balancing.py
-```
+*   **Standard Chord DHT (Random Hashing):**
+    ```bash
+    cd containerized_environment/standard_dht
+    docker compose up -d
+    ```
+*   **Clustered Chord DHT (K-Means Hashing):**
+    ```bash
+    cd containerized_environment/clustered_dht
+    docker compose up -d
+    ```
+*   **Semantic Router Chord DHT (Proposed):**
+    ```bash
+    cd containerized_environment/semantic_router
+    docker compose up -d
+    ```
 
-**Simulation 4: Dynamic Node Join & Replication**
-Proves the self-healing and data migration of a new node joining an existing network, correctly inheriting the network's Replication Factor (RF) via Bootstrap discovery.
+### 3. Tear Down Cluster
+Stop and clean up containers and networks inside the respective folder:
 ```bash
-python3 src/architectures/semantic_router/simulations/04_node_join.py
+docker compose down
 ```
-
-_(You can run identical simulation scripts located inside the `src/architectures/clustered_dht/simulations/` and `src/architectures/standard_dht/simulations/` directories to compare their outputs.)_
 
 ---
 
 ## 📊 Benchmarks & Results
 
-To evaluate the empirical trade-offs of the system, this project includes a consolidated benchmarking suite (`src/benchmarks/evaluate.py`) that tests the architectures across various metrics.
+This project supports running comprehensive benchmarking suites in both the **local threaded simulation** and the **containerized Docker environment**. The results for each run are isolated into separate folders.
 
-### Running the Evaluation Suite
-You can execute the benchmarks for specific components or run the entire suite:
+### 1. Local Threaded Evaluation
+Run evaluations and generate plots for the local loopback DHT ring:
 
-*   **Run all benchmarks end-to-end (Recommended):**
+*   **Execute all local benchmarks:**
     ```bash
-    python3 src/benchmarks/evaluate.py --mode all
+    python3 -m src.benchmarks.local.evaluate --mode all
     ```
-*   **Run specific benchmark modes:**
-    - **Scaling:** Multi-architecture comparison (Standard DHT, Clustered DHT, Semantic Router) at a scale of 2,000 courses.
-      ```bash
-      python3 src/benchmarks/evaluate.py --mode scale --dataset_size 2000
-      ```
-    - **Fault Tolerance:** Evaluation under node crashes (0% to 33.3% failures) with replication factor `RF=3`.
-      ```bash
-      python3 src/benchmarks/evaluate.py --mode fault --replication_factor 3
-      ```
-    - **Node Join:** Data migration and ring healing evaluation.
-      ```bash
-      python3 src/benchmarks/evaluate.py --mode join --replication_factor 3
-      ```
-    - **Load Balancing:** Average latency scaling under concurrent workloads (with vs. without delegation).
-      ```bash
-      python3 src/benchmarks/evaluate.py --mode load --replication_factor 3
-      ```
+*   **Execute specific modes (scale / fault / join / load):**
+    ```bash
+    python3 -m src.benchmarks.local.evaluate --mode scale --dataset_size 2000
+    ```
+*   **Generate Local Charts:**
+    ```bash
+    python3 -m src.benchmarks.local.plot
+    ```
+    _Outputs are saved to `data/benchmarks/results/local/` and `data/benchmarks/plots/local/`._
 
-### Generating Visualization Charts
-After running the evaluations, generate all metrics curves and comparison plots by running:
-```bash
-python3 src/benchmarks/plot.py
-```
+### 2. Containerized Cluster Evaluation
+Ensure the cluster nodes for your target architecture are active, then run evaluations inside its distinct runner container:
+
+*   **Run Standard Chord DHT Benchmarks:**
+    ```bash
+    cd containerized_environment/standard_dht
+    docker compose run standard-runner
+    ```
+*   **Run Clustered Chord DHT Benchmarks:**
+    ```bash
+    cd containerized_environment/clustered_dht
+    docker compose run clustered-runner
+    ```
+*   **Run Semantic Router Chord DHT Benchmarks:**
+    ```bash
+    cd containerized_environment/semantic_router
+    docker compose run semantic-runner
+    ```
+*   **Generate Containerized Comparison Charts:**
+    Once you run evaluations for one or more architectures, run the plotter script inside any runner to overlay the curves:
+    ```bash
+    cd containerized_environment/semantic_router
+    docker compose run --entrypoint "python -m src.benchmarks.containerized.plot" semantic-runner
+    ```
+    _Outputs are automatically written back to your host machine in `data/benchmarks/results/containerized/` and `data/benchmarks/plots/containerized/`._
 
 ### Metrics Measured:
-- **Search Recall:** Accuracy against a monolithic exact-KNN baseline.
-- **Network Hops:** Average routing hops and the impact of target node deduplication.
-- **End-to-End Latency:** Latency scaling advantages under single and concurrent workloads.
-- **Healing & Migration Speed:** Duration (in seconds) for rings to stabilize and transfer replica data over RPC.
+- **Search Recall:** Accuracy compared to a monolithic exact-KNN baseline.
+- **Network Hops:** Average routing hops and semantic cluster mapping efficiency.
+- **End-to-End Latency:** Search latency scaling advantages under concurrent query workloads.
+- **Healing & Migration Speed:** Duration (in seconds) for rings to heal after node crashes and migrate primary keys on node joins.
 
-**All raw collected metrics are saved in `data/benchmarks/results/` and generated visualization charts are stored in the [`data/benchmarks/plots/`](data/benchmarks/README.md) directory.** Please view the README in [`data/benchmarks/README.md`](data/benchmarks/README.md) for a full analysis of the findings!
+**Please view the README in [`data/benchmarks/README.md`](data/benchmarks/README.md) for a full, visual analysis of the local evaluation findings!**
+
+---
+
+## 🏆 Key Containerized Benchmark Findings
+
+The following plots represent the final "apples-to-apples" comparison of all three architectures running in fully isolated Docker container networks. 
+
+### 1. Scaling Metrics (nprobe vs Hops & Latency)
+Demonstrates how the **Semantic Router** maintains flat $O(1)$ routing hops as the search radius expands, while the **Clustered DHT** suffers linear hop growth due to randomized hash scatter.
+![Scaling Metrics](data/benchmarks/plots/containerized/scaling_metrics_combined.png)
+
+### 2. Network Expansion (Dynamic Node Joins)
+Demonstrates the impact of dynamically scaling the network from 5 nodes to 6 nodes.
+![Node Join Metrics](data/benchmarks/plots/containerized/node_join_combined.png)
+
+### 3. Fault Tolerance (Node Crashes)
+Demonstrates the recall resiliency of the architectures when random nodes are forcibly killed.
+![Fault Tolerance](data/benchmarks/plots/containerized/fault_tolerance_combined_recall.png)
+
+### 🏆 Conclusion: The Winner Architecture
+
+There is no single "silver bullet"; the optimal architecture depends entirely on the **Network Density** (the ratio of physical nodes to semantic clusters):
+
+1. **Dense Networks (Nodes > Clusters): The Semantic Router Wins.** 
+   When the physical ring is large enough that adjacent semantic clusters map to isolated physical nodes, the Semantic Router achieves the fault tolerance of the Clustered DHT while maintaining blazing fast $O(1)$ flat routing efficiency.
+2. **Sparse Networks (Nodes < Clusters): The Clustered DHT Wins.**
+   When the physical ring is small, the Semantic Router is forced to bundle adjacent clusters onto single machines, creating dangerous Correlated Failure Domains. The Clustered DHT artificially scatters data across the sparse ring to guarantee fault tolerance, trading latency for data survival.
+
+*(Note: This vulnerability is mathematically and empirically proven in the "Disaster Scenario" benchmark. Please see [`data/benchmarks/README.md`](data/benchmarks/README.md) for the full analytical proof and plotting).*
+
+### 🧠 The Dual-Purpose of `nprobe`
+In traditional Machine Learning vector databases, `nprobe` is purely an **accuracy parameter**. However, in this decentralized P2P architecture, `nprobe` serves a critical dual purpose:
+* **1. Semantic Recall:** Increases the geometric search radius to find better matches.
+* **2. Physical Fault Tolerance:** Physically expands the query footprint across multiple network nodes. Higher `nprobe` mathematically increases the probability of hitting surviving replica nodes during a catastrophic ring failure!
 
 ---
 

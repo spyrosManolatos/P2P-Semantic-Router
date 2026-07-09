@@ -114,16 +114,31 @@ class ChordNode:
         return vec
 
     def _vectorize_and_find_centroids(self, text: str, nprobe: int = 1) -> List[int]:
-        """Converts text to vector, calculates distance, returns top `nprobe` cluster IDs."""
+        """Converts text to vector, finds the single best cluster, then expands to adjacent
+        cluster IDs (best ± radius) for nprobe fanout — identical strategy to the semantic
+        router. This ensures the only architectural difference between the two is routing
+        cost (SHA-1 O(log N) hops vs linear-mapped O(1) hops), not cluster selection."""
         vec = self._vectorize(text)
-            
+
         distances = []
         for c_id, centroid in enumerate(self.centroids):
             dist = math.sqrt(sum((v - c)**2 for v, c in zip(vec, centroid)))
             distances.append((dist, c_id))
-            
+
         distances.sort(key=lambda x: x[0])
-        return [c_id for dist, c_id in distances[:nprobe]]
+        best_c_id = distances[0][1]
+
+        # Expand to adjacent cluster IDs, same as semantic router
+        result = [best_c_id]
+        radius = 1
+        while len(result) < nprobe:
+            result.append((best_c_id + radius) % self.k)
+            if len(result) >= nprobe:
+                break
+            result.append((best_c_id - radius) % self.k)
+            radius += 1
+
+        return result
 
     @property
     def successor(self) -> str:
@@ -613,7 +628,11 @@ class ChordNode:
     # --- Lifecycle Control ---
 
     def start(self):
-        self.server = ThreadedXMLRPCServer((self.ip, self.port), logRequests=False, allow_none=True)
+        # Bind to 0.0.0.0 for external access in containerized environments (unless localhost/127.0.0.1)
+        bind_ip = self.ip
+        if self.ip not in ["127.0.0.1", "localhost"]:
+            bind_ip = "0.0.0.0"
+        self.server = ThreadedXMLRPCServer((bind_ip, self.port), logRequests=False, allow_none=True)
         self.server.register_instance(self)
         
         self.server_thread = threading.Thread(target=self.server.serve_forever, daemon=True)
