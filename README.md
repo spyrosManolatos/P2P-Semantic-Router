@@ -50,7 +50,7 @@ This repository implements and compares four different architectural approaches 
 1. **Monolithic Linear Search (`src/architectures/monolithic_linear/`):** A centralized baseline that performs an exhaustive linear scan (exact KNN) over all vectors. Provides perfect recall but scales poorly as $O(N)$.
 2. **Standard DHT (`src/architectures/standard_dht/`):** A standard Chord DHT implementation where vectors are distributed using random SHA-1 hashing. Provides highly scalable storage, but similarity queries are inefficient as they require broadcasting to all nodes because semantic locality is lost.
 3. **Clustered DHT (`src/architectures/clustered_dht/`):** A hybrid baseline where data is grouped via K-Means, but the clusters are placed on the ring using random SHA-1 hashing rather than semantic geometric mapping. 
-4. **P2P Semantic Router (`src/architectures/semantic_router/`):** The novel approach where the DHT ring is mathematically partitioned using K-Means centroids. Data is routed based on semantic similarity rather than random hashes, allowing for $O(1)$ routing to the correct cluster and distributed `nprobe` fanout for similarity searches.
+4. **P2P Semantic Router (`src/architectures/semantic_router/`):** The novel approach where the DHT ring is mathematically partitioned using K-Means centroids. Data is routed based on semantic similarity rather than random hashes: the primary cluster is resolved via a standard Chord lookup ($O(\log N)$), and each additional cluster in the `nprobe` fanout is reached in $O(1)$ via direct successor/predecessor hops, for a total query cost of $O(\log N + nprobe)$.
 
 ---
 
@@ -68,7 +68,7 @@ The system is tested using a real-world dataset of Udemy courses sourced from Ka
 
 1. **Semantic Centroid Routing:** Nodes automatically vectorize raw text using TF-IDF and route the data to the correct cluster ID on the DHT ring.
 2. **True Vector Embeddings:** Text is vectorized exactly _once_ during insertion (`PUT`), avoiding heavy $O(N)$ text-processing bottlenecks during queries.
-3. **`nprobe` Distributed Fanout:** Similarity queries (`GET`) can seamlessly branch out across multiple mathematical clusters simultaneously to merge results, allowing a dynamic trade-off between speed and recall.
+3. **`nprobe` Distributed Fanout:** Similarity queries (`GET`) can seamlessly branch out across multiple mathematical clusters to merge results, allowing a dynamic trade-off between speed and recall. Only the first cluster costs a full $O(\log N)$ Chord lookup; each subsequent probed cluster is reached in $O(1)$ via direct successor/predecessor hops, since semantically adjacent clusters are mapped to ring-adjacent nodes.
 4. **Active Replica Load Balancing:** Solves the notorious "Hot Spot" CPU problem. If a node detects high query load, it mathematically delegates the read queries to its replica node, doubling the read capacity of the network without any data migration!
 5. **Self-Healing Fault Tolerance:** Standard Chord stabilization protocols ensure that if a Primary node crashes, the Replica node instantly promotes its backup data to Primary.
 
@@ -261,7 +261,7 @@ Ensure the cluster nodes for your target architecture are active, then run evalu
 The following plots represent the final "apples-to-apples" comparison of all three architectures running in fully isolated Docker container networks. 
 
 ### 1. Scaling Metrics (nprobe vs Hops & Latency)
-Demonstrates how the **Semantic Router** maintains flat $O(1)$ routing hops as the search radius expands, while the **Clustered DHT** suffers linear hop growth due to randomized hash scatter.
+Demonstrates how the **Semantic Router**'s hop count grows only by $O(1)$ per additional probed cluster as the search radius (`nprobe`) expands, while the **Clustered DHT** suffers linear hop growth due to randomized hash scatter.
 ![Scaling Metrics](data/benchmarks/plots/containerized/scaling_metrics_combined.png)
 
 ### 2. Network Expansion (Dynamic Node Joins)
