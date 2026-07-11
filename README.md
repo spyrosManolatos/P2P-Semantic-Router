@@ -199,6 +199,53 @@ docker compose down
 
 ---
 
+## 🌐 Interactive Query Gateway (Demo Application)
+
+The project ships with a small **HTTP gateway application** that lets you run live similarity queries against a running cluster from the browser and *see the DHT routing happen*: which node the query entered from, which semantic clusters the entry node decided to probe, where nodes and clusters sit on the Chord identifier ring, the finger tables along the lookup path, and — most importantly — **how many hops each lookup took**.
+
+> **Design note:** the application is deliberately **monolithic — backend only**. There is no separate frontend project; the FastAPI service ([`src/api/main.py`](src/api/main.py)) serves both the JSON API and a single self-contained demo page. This is intentional: the goal of the application is not web engineering, but building **intuition about the hop mechanics** of the three DHT architectures. Everything of scientific interest (entry-node selection, cluster→ring placement, lookup paths, hop counting) lives in the backend and is exposed transparently.
+
+Each query enters the ring through a **random node**, simulating an arbitrary peer receiving a request in a real P2P deployment (a specific entry node can also be forced via the API).
+
+### 1. Start a cluster with its gateway
+The gateway is part of the compose stacks:
+
+*   **Semantic Router** — gateway at **http://localhost:8080**:
+    ```bash
+    cd containerized_environment/semantic_router
+    docker compose up -d --build
+    ```
+*   **Clustered DHT** — gateway at **http://localhost:8081**:
+    ```bash
+    cd containerized_environment/clustered_dht
+    docker compose up -d --build
+    ```
+(`--build` is only needed the first time, or after changing `requirements.txt`; both stacks can run side by side for an A/B comparison.)
+
+### 2. Inject data
+Node storage is **in-memory**, so the ring starts empty after every `up`/restart. Fill it with the Kaggle course dataset:
+```bash
+# Semantic Router stack
+docker compose exec gateway python src/scripts/inject_data.py --limit 500
+
+# Clustered DHT stack
+docker compose exec clustered-gateway python src/scripts/inject_data.py --node clustered-bootstrap:5000 --limit 500
+```
+`--limit N` controls how many courses are injected (`0` = the entire dataset). Any ring node works as the injection point — `put_course` routes each record to its responsible peer.
+
+### 3. Query
+Open the demo page (**http://localhost:8080** or **:8081**), type a free-text query (e.g. *"python for data science"*), pick an `nprobe`, and hit Search. The page shows:
+
+*   **Entry node, clusters probed, hop count and latency** for the query.
+*   A **Chord ring diagram** with every node and probed cluster at its true ring position, plus dashed lookup lines labeled with per-lookup hop counts.
+*   The **routing decision table** (cluster hashes, ring positions, serving nodes) and the **finger tables** of every node the lookup passed through, with the jump actually taken highlighted.
+
+Running the same `nprobe = 3` query on both gateways side by side demonstrates the core thesis result: the Semantic Router's linearly-mapped clusters sit adjacent on the ring (one cheap lookup), while SHA-1 scatters the Clustered DHT's clusters across the ring, forcing a separate multi-hop lookup per cluster.
+
+The raw API is also available: `POST /query` (`{"query": "...", "nprobe": 1-10, "entry_node": optional}`), `GET /nodes` for live ring membership, and interactive OpenAPI docs at `/docs`.
+
+---
+
 ## 📊 Benchmarks & Results
 
 This project supports running comprehensive benchmarking suites in both the **local threaded simulation** and the **containerized Docker environment**. The results for each run are isolated into separate folders.

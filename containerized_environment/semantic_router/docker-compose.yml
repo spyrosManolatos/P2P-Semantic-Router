@@ -10,6 +10,7 @@ services:
       - "8001:5000"
     volumes:
       - ../../data:/app/data
+      - ../../src:/app/src
 
   node-1:
     image: p2p-semantic-router:latest
@@ -21,6 +22,7 @@ services:
       - "8002:5000"
     volumes:
       - ../../data:/app/data
+      - ../../src:/app/src
 
   node-2:
     image: p2p-semantic-router:latest
@@ -32,6 +34,7 @@ services:
       - "8003:5000"
     volumes:
       - ../../data:/app/data
+      - ../../src:/app/src
 
   node-3:
     image: p2p-semantic-router:latest
@@ -43,6 +46,7 @@ services:
       - "8004:5000"
     volumes:
       - ../../data:/app/data
+      - ../../src:/app/src
 
   node-4:
     image: p2p-semantic-router:latest
@@ -54,6 +58,7 @@ services:
       - "8005:5000"
     volumes:
       - ../../data:/app/data
+      - ../../src:/app/src
 
   node-5:
     image: p2p-semantic-router:latest
@@ -63,6 +68,25 @@ services:
       - "8006:5000"
     volumes:
       - ../../data:/app/data
+      - ../../src:/app/src
+
+  gateway:
+    image: p2p-semantic-router:latest
+    container_name: gateway
+    entrypoint: ["uvicorn", "api.main:app", "--app-dir", "src", "--host", "0.0.0.0", "--port", "8080"]
+    environment:
+      - DHT_NODES=bootstrap-node:5000,node-1:5000,node-2:5000,node-3:5000,node-4:5000
+    depends_on:
+      - bootstrap-node
+      - node-1
+      - node-2
+      - node-3
+      - node-4
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../../data:/app/data
+      - ../../src:/app/src
 
   semantic-runner:
     image: p2p-semantic-router:latest

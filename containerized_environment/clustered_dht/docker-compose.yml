@@ -10,6 +10,7 @@ services:
       - "8201:5000"
     volumes:
       - ../../data:/app/data
+      - ../../src:/app/src
 
   clustered-node-1:
     image: p2p-semantic-router:latest
@@ -21,6 +22,7 @@ services:
       - "8202:5000"
     volumes:
       - ../../data:/app/data
+      - ../../src:/app/src
 
   clustered-node-2:
     image: p2p-semantic-router:latest
@@ -32,6 +34,7 @@ services:
       - "8203:5000"
     volumes:
       - ../../data:/app/data
+      - ../../src:/app/src
 
   clustered-node-3:
     image: p2p-semantic-router:latest
@@ -43,6 +46,7 @@ services:
       - "8204:5000"
     volumes:
       - ../../data:/app/data
+      - ../../src:/app/src
 
   clustered-node-4:
     image: p2p-semantic-router:latest
@@ -54,6 +58,7 @@ services:
       - "8205:5000"
     volumes:
       - ../../data:/app/data
+      - ../../src:/app/src
 
   clustered-node-5:
     image: p2p-semantic-router:latest
@@ -63,6 +68,26 @@ services:
       - "8206:5000"
     volumes:
       - ../../data:/app/data
+      - ../../src:/app/src
+
+  clustered-gateway:
+    image: p2p-semantic-router:latest
+    container_name: clustered-gateway
+    entrypoint: ["uvicorn", "api.main:app", "--app-dir", "src", "--host", "0.0.0.0", "--port", "8080"]
+    environment:
+      - DHT_NODES=clustered-bootstrap:5000,clustered-node-1:5000,clustered-node-2:5000,clustered-node-3:5000,clustered-node-4:5000
+      - GATEWAY_TITLE=P2P Clustered DHT
+    depends_on:
+      - clustered-bootstrap
+      - clustered-node-1
+      - clustered-node-2
+      - clustered-node-3
+      - clustered-node-4
+    ports:
+      - "8081:8080"
+    volumes:
+      - ../../data:/app/data
+      - ../../src:/app/src
 
   clustered-runner:
     image: p2p-semantic-router:latest

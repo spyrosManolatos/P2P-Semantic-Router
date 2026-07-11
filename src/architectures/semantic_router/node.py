@@ -203,6 +203,37 @@ class ChordNode:
             except Exception:
                 return [self.successor, hop_count]
 
+    def find_successor_traced(self, id_str: str, hop_count: int = 0, path: Optional[List[str]] = None) -> List[Any]:
+        """Like find_successor_with_hops, but also records which nodes the lookup passed through."""
+        path = (path or []) + [self.address]
+        id_val = int(id_str)
+        if in_half_open_range(id_val, self.node_id, self.successor_id):
+            return [self.successor, hop_count, path]
+        else:
+            n0_addr = self.closest_preceding_node(id_val)
+            if n0_addr == self.address:
+                return [self.successor, hop_count, path]
+            try:
+                with self._get_rpc_client(n0_addr) as n0:
+                    return n0.find_successor_traced(str(id_val), hop_count + 1, path)
+            except Exception:
+                return [self.successor, hop_count, path]
+
+    def get_finger_table(self) -> List[Dict[str, Any]]:
+        """Finger table compressed into ranges: consecutive fingers pointing at the same node are grouped."""
+        groups: List[Dict[str, Any]] = []
+        for i, addr in enumerate(self.finger_table):
+            if groups and groups[-1]["node"] == addr:
+                groups[-1]["to_finger"] = i
+            else:
+                groups.append({
+                    "from_finger": i,
+                    "to_finger": i,
+                    "start_hash": str((self.node_id + (2 ** i)) % (2 ** self.m)),
+                    "node": addr,
+                })
+        return groups
+
     def closest_preceding_node(self, id_val: int) -> str:
         for i in range(self.m - 1, -1, -1):
             finger_addr = self.finger_table[i]
@@ -479,8 +510,10 @@ class ChordNode:
                 print(f"[{self.address}] Failed to route PUT for cluster {cluster_id} to {target_node}: {e}")
                 return False
 
-    def get_similar_courses(self, course_json: str, nprobe: int = 1, return_hops: bool = False) -> Any:
+    def get_similar_courses(self, course_json: str, nprobe: int = 1, return_hops: bool = False, return_trace: bool = False) -> Any:
         """Finds top `nprobe` clusters, routes GETs, and returns Top-5 courses using Cosine Similarity."""
+        if return_trace:
+            return_hops = True
         course = json.loads(course_json)
         text = f"{course['course_title']} {course['category']} {course['description']}"
         
@@ -496,7 +529,11 @@ class ChordNode:
         best_cluster = top_clusters[0]
         best_hash = self.get_cluster_hash(best_cluster)
         
-        if return_hops:
+        lookup_path = [self.address]
+        if return_trace:
+            current_target, hops, lookup_path = self.find_successor_traced(str(best_hash))
+            total_hops += hops
+        elif return_hops:
             current_target, hops = self.find_successor_with_hops(str(best_hash))
             total_hops += hops
         else:
@@ -506,6 +543,23 @@ class ChordNode:
         pending_queries = {current_target: list(top_clusters)}
         visited = set()
         hop_counted_nodes = {current_target}
+
+        # Routing trace for the API gateway: hashes are stringified because
+        # they exceed XML-RPC's integer range.
+        trace = None
+        if return_trace:
+            trace = {
+                "entry_node": self.address,
+                "entry_node_id": str(self.node_id),
+                "ring_bits": self.m,
+                "top_clusters": [int(c) for c in top_clusters],
+                "cluster_hashes": {str(cid): str(self.get_cluster_hash(cid)) for cid in top_clusters},
+                "primary_cluster": int(best_cluster),
+                "primary_owner": current_target,
+                "chord_hops_to_owner": total_hops,
+                "lookup_path": lookup_path,
+                "nodes_contacted": [],
+            }
         
         while pending_queries:
             target_node = list(pending_queries.keys())[0]
@@ -514,6 +568,9 @@ class ChordNode:
             if target_node in visited:
                 continue
             visited.add(target_node)
+
+            if trace is not None:
+                trace["nodes_contacted"].append({"node": target_node, "clusters": [int(c) for c in cluster_ids]})
             
             if target_node not in hop_counted_nodes:
                 if return_hops:
@@ -576,6 +633,8 @@ class ChordNode:
         
         # Return top 5
         final_list = [c_str for sim, c_str in ranked_results[:5]]
+        if return_trace:
+            return final_list, total_hops, trace
         if return_hops:
             return final_list, total_hops
         return final_list

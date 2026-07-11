@@ -202,6 +202,37 @@ class ChordNode:
             except Exception:
                 return [self.successor, hop_count]
 
+    def find_successor_traced(self, id_str: str, hop_count: int = 0, path: Optional[List[str]] = None) -> List[Any]:
+        """Like find_successor_with_hops, but also records which nodes the lookup passed through."""
+        path = (path or []) + [self.address]
+        id_val = int(id_str)
+        if in_half_open_range(id_val, self.node_id, self.successor_id):
+            return [self.successor, hop_count, path]
+        else:
+            n0_addr = self.closest_preceding_node(id_val)
+            if n0_addr == self.address:
+                return [self.successor, hop_count, path]
+            try:
+                with self._get_rpc_client(n0_addr) as n0:
+                    return n0.find_successor_traced(str(id_val), hop_count + 1, path)
+            except Exception:
+                return [self.successor, hop_count, path]
+
+    def get_finger_table(self) -> List[Dict[str, Any]]:
+        """Finger table compressed into ranges: consecutive fingers pointing at the same node are grouped."""
+        groups: List[Dict[str, Any]] = []
+        for i, addr in enumerate(self.finger_table):
+            if groups and groups[-1]["node"] == addr:
+                groups[-1]["to_finger"] = i
+            else:
+                groups.append({
+                    "from_finger": i,
+                    "to_finger": i,
+                    "start_hash": str((self.node_id + (2 ** i)) % (2 ** self.m)),
+                    "node": addr,
+                })
+        return groups
+
     def closest_preceding_node(self, id_val: int) -> str:
         for i in range(self.m - 1, -1, -1):
             finger_addr = self.finger_table[i]
@@ -435,8 +466,10 @@ class ChordNode:
                 print(f"[{self.address}] Failed to route PUT for cluster {cluster_id} to {target_node}: {e}")
                 return False
 
-    def get_similar_courses(self, course_json: str, nprobe: int = 1, return_hops: bool = False) -> Any:
+    def get_similar_courses(self, course_json: str, nprobe: int = 1, return_hops: bool = False, return_trace: bool = False) -> Any:
         """Finds top `nprobe` clusters, routes GETs, and returns Top-5 courses using Cosine Similarity."""
+        if return_trace:
+            return_hops = True
         course = json.loads(course_json)
         text = f"{course['course_title']} {course['category']} {course['description']}"
         
@@ -448,11 +481,39 @@ class ChordNode:
         results = []
         total_hops = 0
         unique_nodes = {}  # target_node -> list of cluster_ids
-        
+
+        # Routing trace for the API gateway: unlike the semantic router, every
+        # cluster needs its own Chord lookup because SHA-1 scatters them, so the
+        # trace records one lookup (hops + path) per cluster. Hashes are
+        # stringified because they exceed XML-RPC's integer range.
+        trace = None
+        if return_trace:
+            trace = {
+                "entry_node": self.address,
+                "entry_node_id": str(self.node_id),
+                "ring_bits": self.m,
+                "top_clusters": [int(c) for c in top_clusters],
+                "cluster_hashes": {str(cid): str(self.get_cluster_hash(cid)) for cid in top_clusters},
+                "primary_cluster": int(top_clusters[0]),
+                "lookups": [],
+                "nodes_contacted": [],
+            }
+
         # 1. Resolve successors and deduplicate targets
         for cluster_id in top_clusters:
             cluster_hash = self.get_cluster_hash(cluster_id)
-            if return_hops:
+            if return_trace:
+                target_node, hops, lookup_path = self.find_successor_traced(str(cluster_hash))
+                trace["lookups"].append({
+                    "cluster_id": int(cluster_id),
+                    "owner": target_node,
+                    "hops": hops,
+                    "path": lookup_path,
+                })
+                if target_node not in unique_nodes:
+                    unique_nodes[target_node] = []
+                    total_hops += hops
+            elif return_hops:
                 target_node, hops = self.find_successor_with_hops(str(cluster_hash))
                 if target_node not in unique_nodes:
                     unique_nodes[target_node] = []
@@ -461,8 +522,16 @@ class ChordNode:
                 target_node = self.find_successor(str(cluster_hash))
                 if target_node not in unique_nodes:
                     unique_nodes[target_node] = []
-            
+
             unique_nodes[target_node].append(cluster_id)
+
+        if trace is not None:
+            trace["primary_owner"] = trace["lookups"][0]["owner"]
+            trace["chord_hops_to_owner"] = trace["lookups"][0]["hops"]
+            trace["lookup_path"] = trace["lookups"][0]["path"]
+            trace["nodes_contacted"] = [
+                {"node": n, "clusters": [int(c) for c in cids]} for n, cids in unique_nodes.items()
+            ]
             
         # 2. Query each unique target node once
         for target_node, cluster_ids in unique_nodes.items():
@@ -505,6 +574,8 @@ class ChordNode:
         
         # Return top 5
         final_list = [c_str for sim, c_str in ranked_results[:5]]
+        if return_trace:
+            return final_list, total_hops, trace
         if return_hops:
             return final_list, total_hops
         return final_list
