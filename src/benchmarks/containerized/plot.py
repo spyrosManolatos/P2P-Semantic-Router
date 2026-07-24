@@ -115,61 +115,112 @@ def plot_scale():
     print("Generated combined scaling metrics plot.")
 
 def plot_fault_tolerance():
-    # Plots a combined apples-to-apples comparison of Recall across all architectures
+    # Plots an apples-to-apples comparison across all architectures for THREE
+    # metrics (recall, average hops, end-to-end latency), each under the
+    # two-point measurement: baseline -> transient dip -> healed recovery.
     architectures = ["standard", "clustered", "semantic"]
     labels = ["Standard DHT", "Clustered DHT", "Semantic Router"]
-    
-    baseline_recalls = []
-    after_recalls = []
-    
+
+    # metric_key -> per-state list across architectures
+    metrics = {
+        "recall":  {"baseline": [], "transient": [], "healed": []},
+        "hops":    {"baseline": [], "transient": [], "healed": []},
+        "latency": {"baseline": [], "transient": [], "healed": []},
+    }
+    nprobe_used = None
+    have_data = False
+
     for arch in architectures:
         results_path = os.path.join(results_dir, f"fault_tolerance_results_{arch}.json")
         if not os.path.exists(results_path):
-            baseline_recalls.append(0)
-            after_recalls.append(0)
+            for m in metrics.values():
+                for s in m:
+                    m[s].append(0)
             continue
-            
+
+        have_data = True
         with open(results_path, "r") as f:
             data = json.load(f)
-            
-        baseline_recalls.append(data.get("baseline", {}).get("recall", 0) * 100)
-        after_recalls.append(data.get("after_failure", {}).get("recall", 0) * 100)
-        
-    if not any(baseline_recalls):
+
+        base = data.get("baseline", {})
+        # Two-point measurement: transient (dip) then healed (recovery).
+        trans = data.get("after_failure_transient", data.get("after_failure", {}))
+        heal = data.get("after_failure_healed", {})
+
+        # recall stored as fraction -> percentage
+        metrics["recall"]["baseline"].append(base.get("recall", 0) * 100)
+        metrics["recall"]["transient"].append(trans.get("recall", 0) * 100)
+        metrics["recall"]["healed"].append(heal.get("recall", 0) * 100)
+
+        metrics["hops"]["baseline"].append(base.get("hops", 0))
+        metrics["hops"]["transient"].append(trans.get("hops", 0))
+        metrics["hops"]["healed"].append(heal.get("hops", 0))
+
+        metrics["latency"]["baseline"].append(base.get("latency", 0))
+        metrics["latency"]["transient"].append(trans.get("latency", 0))
+        metrics["latency"]["healed"].append(heal.get("latency", 0))
+
+        if arch != "standard" and "nprobe" in data:
+            nprobe_used = data["nprobe"]
+
+    if not have_data:
         return
-        
+
+    nprobe_str = f" (fixed nprobe={nprobe_used})" if nprobe_used is not None else ""
+
     x = np.arange(len(labels))
-    width = 0.35
-    
-    fig, ax = plt.subplots(figsize=(10, 6))
-    rects1 = ax.bar(x - width/2, baseline_recalls, width, label='Before Failure (Baseline)', color='#2ecc71', alpha=0.8)
-    rects2 = ax.bar(x + width/2, after_recalls, width, label='After Node Failure (5s wait)', color='#e74c3c', alpha=0.8)
-    
-    ax.set_ylabel('Recall Accuracy (%)', fontsize=12)
-    ax.set_title('Fault Tolerance: Recall Impact by Architecture', fontsize=14, fontweight='bold')
-    ax.set_xticks(x)
-    ax.set_xticklabels(labels, fontsize=11)
-    ax.set_ylim(0, 115)
-    ax.legend()
-    
-    # Add data labels
-    def autolabel(rects):
-        for rect in rects:
-            height = rect.get_height()
-            ax.annotate(f'{height:.1f}%',
-                        xy=(rect.get_x() + rect.get_width() / 2, height),
-                        xytext=(0, 3),  # 3 points vertical offset
-                        textcoords="offset points",
-                        ha='center', va='bottom', fontweight='bold')
-                        
-    autolabel(rects1)
-    autolabel(rects2)
-    
-    plt.grid(axis='y', linestyle='--', alpha=0.7)
-    plt.tight_layout()
-    plt.savefig(os.path.join(plots_dir, "fault_tolerance_combined_recall.png"), dpi=300)
+    width = 0.27
+    state_style = [
+        ("baseline",  "Before Failure (Baseline)",   "#2ecc71"),
+        ("transient", "Transient (5s, mid-recovery)", "#e74c3c"),
+        ("healed",    "Healed (after promotion)",     "#3498db"),
+    ]
+
+    panels = [
+        ("recall",  "Recall Accuracy (%)",   "{:.0f}%",  "Recall"),
+        ("hops",    "Avg. Routing Hops",     "{:.2f}",   "Routing Hops"),
+        ("latency", "End-to-End Latency (ms, relative)", "{:.0f}", "Latency"),
+    ]
+
+    fig, axes = plt.subplots(1, 3, figsize=(20, 6))
+
+    for ax, (mkey, ylabel, fmt, subtitle) in zip(axes, panels):
+        m = metrics[mkey]
+        rects_groups = []
+        for (skey, slabel, scolor), off in zip(state_style, (-width, 0.0, width)):
+            rects = ax.bar(x + off, m[skey], width, label=slabel, color=scolor, alpha=0.85)
+            rects_groups.append(rects)
+
+        ax.set_ylabel(ylabel, fontsize=12)
+        ax.set_title(subtitle, fontsize=13, fontweight='bold')
+        ax.set_xticks(x)
+        ax.set_xticklabels(labels, fontsize=10, rotation=10)
+        ax.grid(axis='y', linestyle='--', alpha=0.7)
+
+        # headroom for data labels
+        top = max([v for grp in rects_groups for v in [r.get_height() for r in grp]] + [1])
+        ax.set_ylim(0, top * 1.18)
+
+        for rects in rects_groups:
+            for rect in rects:
+                height = rect.get_height()
+                ax.annotate(fmt.format(height),
+                            xy=(rect.get_x() + rect.get_width() / 2, height),
+                            xytext=(0, 3), textcoords="offset points",
+                            ha='center', va='bottom', fontweight='bold', fontsize=8)
+
+    # single shared legend + supertitle
+    handles, leg_labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, leg_labels, loc='upper center', ncol=3, fontsize=11,
+               bbox_to_anchor=(0.5, 0.99))
+    fig.suptitle(f'Fault Tolerance: Transient Dip and Recovery{nprobe_str}',
+                 fontsize=15, fontweight='bold', y=1.04)
+
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    plt.savefig(os.path.join(plots_dir, "fault_tolerance_combined_recall.png"),
+                dpi=300, bbox_inches='tight')
     plt.close()
-    print("Generated combined fault tolerance recall plot.")
+    print("Generated combined fault tolerance plot (recall + hops + latency).")
 
 def plot_node_join():
     architectures = ["standard", "clustered", "semantic"]
@@ -178,7 +229,8 @@ def plot_node_join():
     orig_recalls, exp_recalls = [], []
     orig_hops, exp_hops = [], []
     orig_lats, exp_lats = [], []
-    
+    nprobe_used = None
+
     for arch in architectures:
         results_path = os.path.join(results_dir, f"node_join_results_{arch}.json")
         if not os.path.exists(results_path):
@@ -186,24 +238,27 @@ def plot_node_join():
             orig_hops.append(0); exp_hops.append(0)
             orig_lats.append(0); exp_lats.append(0)
             continue
-            
+
         with open(results_path, "r") as f:
             data = json.load(f)
-            
+
         orig_recalls.append(data["original_5_nodes"]["recall"] * 100)
         exp_recalls.append(data["expanded_6_nodes"]["recall"] * 100)
-        
+
         orig_hops.append(data["original_5_nodes"]["hops"])
         exp_hops.append(data["expanded_6_nodes"]["hops"])
-        
+
         orig_lats.append(data["original_5_nodes"]["latency"])
         exp_lats.append(data["expanded_6_nodes"]["latency"])
-        
+        if arch != "standard" and "nprobe" in data:
+            nprobe_used = data["nprobe"]
+
     if not any(orig_recalls):
         return
-        
+
+    nprobe_str = f" (fixed nprobe={nprobe_used})" if nprobe_used is not None else ""
     fig, axs = plt.subplots(1, 3, figsize=(18, 5))
-    fig.suptitle("Node Join Impact: Dynamic Ring Expansion (5 -> 6 Nodes)", fontsize=15, fontweight='bold')
+    fig.suptitle(f"Node Join Impact: Dynamic Ring Expansion (5 -> 6 Nodes){nprobe_str}", fontsize=15, fontweight='bold')
     
     x = np.arange(len(labels))
     width = 0.35
@@ -324,6 +379,84 @@ def plot_disaster_scenario():
     plt.close()
     print("Generated disaster scenario comparison plot.")
 
+def plot_hops_sweep():
+    # Virtual-node scaling experiment: routing hops vs nprobe (the win) + recall
+    # sanity line. Semantic fanout stays ~flat (adjacent clusters, same/neighbor
+    # node); clustered grows ~linearly (a fresh lookup per scattered cluster).
+    # Coincident-line safety: the two recall curves can overlap EXACTLY (identical
+    # cluster sets retrieved), so each series carries its own linestyle + marker as
+    # secondary encoding — identity never rests on color alone, and a dashed line
+    # drawn on top of a solid one stays visible under perfect overlap.
+    arch_style = [
+        # (arch, label, color, linestyle, marker, zorder)
+        ("clustered", "Clustered DHT",   "#3498db", "-",  "s", 2),
+        ("semantic",  "Semantic Router", "#e74c3c", "--", "o", 3),
+        ("standard",  "Standard DHT",    "#95a5a6", ":",  "",  1),
+    ]
+    num_nodes = None
+    fig, (axh, axr) = plt.subplots(1, 2, figsize=(15, 6))
+    plotted = False
+    recall_pts = []  # all plotted recall %s, for a data-driven (compact) y-range
+
+    for arch, label, color, ls, mk, zo in arch_style:
+        path = os.path.join(results_dir, f"hops_sweep_results_{arch}.json")
+        if not os.path.exists(path):
+            continue
+        with open(path, "r") as f:
+            data = json.load(f)
+        x = data["nprobe_values"]
+        num_nodes = data.get("num_nodes", num_nodes)
+        rpct = [r * 100 for r in data["recall"]]
+        if arch == "standard" and len(x) == 1:
+            # Standard has no nprobe: draw a flat reference line across the range.
+            axh.axhline(data["hops"][0], color=color, linestyle=":", linewidth=1.6,
+                        label=f"{label} (no nprobe): {data['hops'][0]:.1f} hops")
+            axr.axhline(rpct[0], color=color, linestyle=":", linewidth=1.6, label=label)
+            recall_pts.append(rpct[0])
+        else:
+            axh.plot(x, data["hops"], marker=mk, markersize=7, linewidth=2.2,
+                     color=color, linestyle=ls, zorder=zo, label=label)
+            axr.plot(x, rpct, marker=mk, markersize=7, linewidth=2.2,
+                     color=color, linestyle=ls, zorder=zo, label=label)
+            recall_pts.extend(rpct)
+            # Selective direct label: endpoint value only (hops panel).
+            axh.annotate(f"{data['hops'][-1]:.1f}", xy=(x[-1], data["hops"][-1]),
+                         xytext=(6, 0), textcoords="offset points",
+                         va="center", fontsize=10, fontweight="bold", color="#333333")
+        plotted = True
+
+    if not plotted:
+        return
+
+    title_n = f" — {num_nodes}-node ring" if num_nodes else ""
+    axh.set_xlabel("nprobe (fanout width)", fontsize=12)
+    axh.set_ylabel("Total routing hops per query (cumulative)", fontsize=12)
+    axh.set_title("Routing hops per query", fontsize=13, fontweight="bold")
+    axh.grid(True, linestyle="--", alpha=0.7)
+    axh.legend(fontsize=10)
+
+    axr.set_xlabel("nprobe (fanout width)", fontsize=12)
+    axr.set_ylabel("Recall@5 (%)", fontsize=12)
+    axr.set_title("Recall@5", fontsize=13, fontweight="bold")
+    # Compact, data-driven y-range so the small recall climb is visible (a 0-100
+    # axis flattens it). Pad a few points on each side, clamp to [0,100].
+    if recall_pts:
+        lo = max(0, min(recall_pts) - 4)
+        hi = min(100, max(recall_pts) + 4)
+        if hi - lo < 8:  # avoid an over-tight range on nearly-flat data
+            mid = (hi + lo) / 2
+            lo, hi = max(0, mid - 4), min(100, mid + 4)
+        axr.set_ylim(lo, hi)
+    axr.grid(True, linestyle="--", alpha=0.7)
+    axr.legend(fontsize=10)
+
+    fig.suptitle(f"Fanout routing cost and recall vs nprobe{title_n}",
+                 fontsize=14, fontweight="bold")
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    plt.savefig(os.path.join(plots_dir, "hops_vs_nprobe.png"), dpi=300, bbox_inches="tight")
+    plt.close()
+    print("Generated virtual-node hops-vs-nprobe plot.")
+
 def main():
     os.makedirs(plots_dir, exist_ok=True)
     plot_scale()
@@ -331,6 +464,7 @@ def main():
     plot_node_join()
     plot_load_balancing()
     plot_disaster_scenario()
+    plot_hops_sweep()
 
 if __name__ == "__main__":
     main()
