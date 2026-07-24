@@ -1,0 +1,22 @@
+services:
+  bootstrap-node:
+    environment:
+      - CONFIG_PATH=/app/containerized_environment/config.vnodes.yaml
+  node-1:
+    environment:
+      - CONFIG_PATH=/app/containerized_environment/config.vnodes.yaml
+  node-2:
+    environment:
+      - CONFIG_PATH=/app/containerized_environment/config.vnodes.yaml
+  node-3:
+    environment:
+      - CONFIG_PATH=/app/containerized_environment/config.vnodes.yaml
+  node-4:
+    environment:
+      - CONFIG_PATH=/app/containerized_environment/config.vnodes.yaml
+  node-5:
+    environment:
+      - CONFIG_PATH=/app/containerized_environment/config.vnodes.yaml
+  semantic-runner:
+    environment:
+      - CONFIG_PATH=/app/containerized_environment/config.vnodes.yaml

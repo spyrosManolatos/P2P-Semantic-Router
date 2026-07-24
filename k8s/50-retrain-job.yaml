@@ -1,0 +1,34 @@
+# ILLUSTRATIVE stub: centroid retraining as an in-cluster Job -- the first step
+# of the blue/green index-rollout pipeline sketched in the thesis (Ch. 8):
+#   drift trigger (CronJob) -> THIS training Job -> new versioned artifact ->
+#   green StatefulSet bulk-loads under the new mapping -> readiness-gated
+#   Service flip -> decommission blue.
+# Only this training step is implemented; the artifact is written inside the
+# Job container (a full pipeline would push it to a versioned ConfigMap/volume).
+# NOTE: retraining changes cluster IDs AND the leaf ordering, i.e. the ring
+# mapping itself -- which is exactly why the cutover must be blue/green and
+# never a hot swap.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: dht-retrain
+  namespace: dht
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: retrain
+          image: p2p-semantic-router:latest
+          imagePullPolicy: Never
+          command:
+            - python
+            - src/ml/train_centroids_bigk.py
+            - --k=4096
+            - --data=data/raw/normalized_kaggle_courses.json
+            - --out=/tmp/kaggle_centroids_next.json
+          resources:
+            requests:
+              cpu: "1"
+              memory: "2Gi"

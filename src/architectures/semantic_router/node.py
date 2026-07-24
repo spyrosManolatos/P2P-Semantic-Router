@@ -6,6 +6,7 @@ import time
 import random
 import math
 import os
+import numpy as np
 from typing import List, Dict, Any, Optional
 from xmlrpc.server import SimpleXMLRPCServer
 from socketserver import ThreadingMixIn
@@ -62,6 +63,24 @@ class ChordNode:
         self.predecessor = None
         self.finger_table = [self.address] * self.m
         self.storage = {}  # Maps str(cluster_id) -> Dict[course_id, course_json]
+
+        # Optional shard persistence (Kubernetes deployment): when SHARD_DIR is
+        # set, this identity snapshots its storage to <SHARD_DIR>/<ip>_<port>.json
+        # and WARM-STARTS from it on respawn. Because the identity (and thus the
+        # owned arc) is stable, the persisted shard is by construction the data
+        # this node should hold; the join migration reconciles any delta written
+        # during downtime. Unset (all Compose experiments) => completely inert.
+        self._shard_path = None
+        self._shard_dirty = False
+        # Tracks whether primary storage changed since the last replica sync,
+        # so the periodic tick can skip re-marshalling/re-sending the whole
+        # primary set when nothing changed (see sync_replicas_to_successors).
+        self._replica_sync_dirty = False
+        _shard_dir = os.environ.get("SHARD_DIR")
+        if _shard_dir:
+            os.makedirs(_shard_dir, exist_ok=True)
+            self._shard_path = os.path.join(_shard_dir, f"{ip}_{port}.json")
+            self._load_shard()
         
         self.shutdown_event = threading.Event()
         self.server = None
@@ -84,14 +103,51 @@ class ChordNode:
             path = self.config['storage']['centroids']['synthetic_path']
         else:
             path = self.config['storage']['centroids']['kaggle_dataset_path']
-            
-        if os.path.exists(path):
+
+        if not os.path.exists(path):
+            raise FileNotFoundError(
+                f"Centroid artifact missing: {path}. "
+                f"Run 'python3 src/ml/train_centroids.py --dataset {self.dataset}' first."
+            )
+
+        # Process-wide artifact cache: with virtual nodes, MANY ChordNode instances
+        # live in one process; each parsing and holding its own copy of a large
+        # artifact (k=4096 -> ~70MB JSON, ~hundreds of MB as objects) would multiply
+        # memory by the vnode count. All identities share one immutable copy.
+        global _ARTIFACT_CACHE
+        try:
+            _ARTIFACT_CACHE
+        except NameError:
+            _ARTIFACT_CACHE = {}
+        if path not in _ARTIFACT_CACHE:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                self.k = data["k"]
-                self.n_features = data["n_features"]
-                self.vocabulary = data["vocabulary"]
-                self.centroids = data["centroids"]
+            centroids_np = np.asarray(data["centroids"], dtype=np.float32)
+            _ARTIFACT_CACHE[path] = {
+                "k": data["k"],
+                "n_features": data["n_features"],
+                "vocabulary": data["vocabulary"],
+                "centroids": centroids_np,
+                # precomputed ||c||^2 per centroid for fast euclidean argmin
+                "centroid_norms2": (centroids_np * centroids_np).sum(axis=1),
+            }
+        art = _ARTIFACT_CACHE[path]
+        self.k = art["k"]
+        self.n_features = art["n_features"]
+        self.vocabulary = art["vocabulary"]
+        self.centroids = art["centroids"]
+        self._centroid_norms2 = art["centroid_norms2"]
+
+        # K and the ring mapping are inseparable: get_cluster_hash() divides the
+        # ring into self.k slots, so a mismatch would place clusters at positions
+        # that do not correspond to the centroid vectors being compared against.
+        if self.k <= 0 or len(self.centroids) != self.k:
+            raise ValueError(
+                f"Corrupt centroid artifact {path}: k={self.k} but "
+                f"{len(self.centroids)} centroids present."
+            )
+
+        print(f"[{self.address}] Loaded artifact: k={self.k}, d={self.n_features}")
 
     def get_cluster_hash(self, cluster_id: int) -> int:
         """Maps a cluster ID linearly across the 0 to 2^m Chord ring to preserve locality."""
@@ -118,14 +174,13 @@ class ChordNode:
     def _vectorize_and_find_centroids(self, text: str, nprobe: int = 1) -> List[int]:
         """Converts text to vector, calculates distance, returns top `nprobe` cluster IDs."""
         vec = self._vectorize(text)
-            
-        distances = []
-        for c_id, centroid in enumerate(self.centroids):
-            dist = math.sqrt(sum((v - c)**2 for v, c in zip(vec, centroid)))
-            distances.append((dist, c_id))
-            
-        distances.sort(key=lambda x: x[0])
-        best_c_id = distances[0][1]
+
+        # Vectorized euclidean argmin: dist^2 = ||x||^2 + ||c||^2 - 2 x.c, and
+        # ||x||^2 is constant across centroids, so argmin(||c||^2 - 2 x.c) suffices.
+        # At fine granularity (k=4096, d=1000) the previous pure-python loop cost
+        # ~4M multiplications per query; this is a single BLAS matvec.
+        x = np.asarray(vec, dtype=np.float32)
+        best_c_id = int((self._centroid_norms2 - 2.0 * (self.centroids @ x)).argmin())
         
         # In Semantic Router, force nprobe to return mathematically adjacent ring clusters
         # instead of semantically similar ones, because adjacent clusters are guaranteed
@@ -155,6 +210,13 @@ class ChordNode:
             return 0
         return int(hashlib.sha1(addr.encode('utf-8')).hexdigest(), 16)
 
+    def get_addr_hash(self, addr: str) -> int:
+        """Alias for get_hash -- sync nodes hash their hostname directly (no
+        transport-prefix stripping needed); kept for interface parity with
+        the async_* node classes, which use a real-IP-based get_addr_hash so
+        evaluate.py's bulk_load_direct() can call either uniformly."""
+        return self.get_hash(addr)
+
     def _get_rpc_client(self, addr: str) -> xmlrpc.client.ServerProxy:
         return xmlrpc.client.ServerProxy(f"http://{addr}", allow_none=True)
 
@@ -165,6 +227,13 @@ class ChordNode:
 
     def get_replication_factor(self) -> int:
         return self.rf
+
+    def set_replication_factor(self, rf: int) -> bool:
+        """Runtime override of the replication factor. Used by the nprobe-recovery
+        benchmark to force RF=0 (primary-only, no replica) for the un-replicated
+        hotspot-failure scenario, without editing config or rebuilding the image."""
+        self.rf = int(rf)
+        return True
 
     def get_successor_list(self) -> List[str]:
         return self.successors
@@ -256,7 +325,7 @@ class ChordNode:
                 predecessor_changed = True
                 
         if predecessor_changed:
-            self.sync_replicas_to_successors()
+            self.sync_replicas_to_successors(force=True)
 
     def store_replica(self, cluster_id: int, value: str) -> bool:
         cid_str = str(cluster_id)
@@ -267,10 +336,48 @@ class ChordNode:
             # We must load json ONCE to get the course_id for the O(1) dictionary key
             new_id = json.loads(value).get("course_id")
             self.storage[cid_str][new_id] = value
+            self._shard_dirty = True  # persistence (no-op unless SHARD_DIR is set)
+            self._replica_sync_dirty = True
         except Exception:
             pass
-            
+
         return True
+
+    def _load_shard(self):
+        """Warm start: reload this identity's persisted shard, if one exists."""
+        if not (self._shard_path and os.path.exists(self._shard_path)):
+            return
+        try:
+            with open(self._shard_path, "r", encoding="utf-8") as f:
+                self.storage = json.load(f)
+            n = sum(len(v) for v in self.storage.values())
+            print(f"[{self.address}] WARM START: loaded shard from persistent volume "
+                  f"({n} courses in {len(self.storage)} clusters).")
+        except Exception as e:
+            print(f"[{self.address}] Shard load failed ({e}); starting cold.")
+
+    def _save_shard(self):
+        """Atomically snapshot storage to the persistent volume (write tmp, rename)."""
+        if not (self._shard_path and self._shard_dirty):
+            return
+        try:
+            tmp = self._shard_path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(self.storage, f)
+            os.replace(tmp, self._shard_path)
+            self._shard_dirty = False
+        except Exception as e:
+            print(f"[{self.address}] Shard save failed: {e}")
+
+    def store_bulk(self, items: List[Any]) -> int:
+        """Batched direct storage for offline bulk loading (index construction).
+        items: list of [cluster_id, course_json]. Stores primaries only (no
+        replica forwarding) -- the loader targets each owner directly."""
+        n = 0
+        for cid, cjson in items:
+            if self.store_replica(int(cid), cjson):
+                n += 1
+        return n
 
     def store_local(self, cluster_id: int, value: str) -> bool:
         """Locally stores a course value and forwards a replica to its successor."""
@@ -380,30 +487,56 @@ class ChordNode:
         print(f"[{self.address}] Migrated clusters to new node {new_node_address}. Deleted local replicas for: {keys_to_delete}")
         return migrated_data
 
-    def sync_replicas_to_successors(self):
-        """Pushes all primary data from this node to its successor list as replicas."""
+    def sync_replicas_to_successors(self, force: bool = False):
+        """Pushes all primary data from this node to its successor list as replicas.
+        Batched into one store_bulk RPC per successor per round instead of one
+        store_replica RPC per course -- at real corpus scale (tens of thousands
+        of courses per node) the unbatched form re-sent every stabilize_interval_sec
+        would mean tens of thousands of RPC round-trips per second per node.
+
+        Still O(primary set size) per call, so the routine periodic tick (called
+        unconditionally from stabilize()) only runs it when primary data actually
+        changed since the last sync (self._replica_sync_dirty). At full-corpus
+        scale a node can own tens of thousands of courses with embedded vectors;
+        re-marshalling and re-sending that whole set every second forever (as
+        this used to do) costs 1GB+ and ~20s of CPU per tick, indefinitely,
+        starving real query handling. Topology changes (new/changed successor)
+        pass force=True since the new successor may not have any data yet,
+        regardless of whether this node's own primary set changed."""
+        if not force and not self._replica_sync_dirty:
+            return
         if self.rf <= 0 or self.successor == self.address:
             return
-            
+
         # Identify what we are Primary for (using predecessor)
         pred_addr = self.predecessor if self.predecessor else self.address
         pred_id = self.get_hash(pred_addr)
-        
+
+        items = []
+        for cid_str, courses in list(self.storage.items()):
+            cluster_id = int(cid_str)
+            cat_hash = self.get_cluster_hash(cluster_id)
+            # If we are the primary holder of this cluster:
+            if in_half_open_range(cat_hash, pred_id, self.node_id):
+                for course_str in list(courses.values()):
+                    items.append([cluster_id, course_str])
+        if not items:
+            self._replica_sync_dirty = False
+            return
+
+        had_failure = False
         for succ in self.successors[:self.rf]:
             if succ == self.address:
                 continue
             try:
                 with self._get_rpc_client(succ) as succ_client:
-                    for cid_str, courses in list(self.storage.items()):
-                        cluster_id = int(cid_str)
-                        cat_hash = self.get_cluster_hash(cluster_id)
-                        
-                        # If we are the primary holder of this cluster:
-                        if in_half_open_range(cat_hash, pred_id, self.node_id):
-                            for course_str in list(courses.values()):
-                                succ_client.store_replica(cluster_id, course_str)
+                    succ_client.store_bulk(items)
             except Exception as e:
                 print(f"[{self.address}] Failed to sync replicas to {succ}: {e}")
+                had_failure = True
+        # Leave dirty=True on failure so the next tick retries; clear it on
+        # success so the routine periodic tick goes back to skipping.
+        self._replica_sync_dirty = had_failure
 
 
 
@@ -541,7 +674,7 @@ class ChordNode:
             
         # 2. Iteratively retrieve adjacent clusters using direct 1-hop links
         pending_queries = {current_target: list(top_clusters)}
-        visited = set()
+        served = set()  # clusters already retrieved; replaces node-level 'visited'
         hop_counted_nodes = {current_target}
 
         # Routing trace for the API gateway: hashes are stringified because
@@ -563,49 +696,55 @@ class ChordNode:
         
         while pending_queries:
             target_node = list(pending_queries.keys())[0]
-            cluster_ids = pending_queries.pop(target_node)
-            
-            if target_node in visited:
+            requested = pending_queries.pop(target_node)
+
+            # Only ask for clusters we have NOT already retrieved. This replaces the
+            # old node-level 'visited' guard, which dropped every cluster routed to an
+            # already-contacted node -> lost results and depressed recall at high nprobe.
+            # Tracking served clusters instead never drops one, and still terminates
+            # (each forwarded cluster moves monotonically toward its owner, then is served).
+            requested = [c for c in requested if c not in served]
+            if not requested:
                 continue
-            visited.add(target_node)
 
             if trace is not None:
-                trace["nodes_contacted"].append({"node": target_node, "clusters": [int(c) for c in cluster_ids]})
-            
+                trace["nodes_contacted"].append({"node": target_node, "clusters": [int(c) for c in requested]})
+
             if target_node not in hop_counted_nodes:
-                if return_hops:
-                    total_hops += 1  # Exactly 1 hop to reach successor/predecessor
+                # Serving from the entry node itself is a local read: no network hop.
+                if return_hops and target_node != self.address:
+                    total_hops += 1  # 1 hop to reach this successor/predecessor
                 hop_counted_nodes.add(target_node)
-                
+
             if target_node == self.address:
-                resp = self.retrieve_local_adjacent(cluster_ids)
-                results.extend(resp["results"])
-                for next_node, cids in resp["next_queries"].items():
-                    if next_node != self.address:
-                        if next_node not in pending_queries:
-                            pending_queries[next_node] = []
-                        pending_queries[next_node].extend(cids)
+                resp = self.retrieve_local_adjacent(requested)
             else:
-                print(f" └──> [{self.address}] Adjacent routing request for {cluster_ids} directly to {target_node}...")
+                print(f" └──> [{self.address}] Adjacent routing request for {requested} directly to {target_node}...")
                 try:
                     with self._get_rpc_client(target_node) as client:
-                        resp = client.retrieve_local_adjacent(cluster_ids)
-                        results.extend(resp["results"])
-                        for next_node, cids in resp["next_queries"].items():
-                            if next_node != self.address:
-                                if next_node not in pending_queries:
-                                    pending_queries[next_node] = []
-                                pending_queries[next_node].extend(cids)
+                        resp = client.retrieve_local_adjacent(requested)
                 except Exception as e:
                     print(f"[{self.address}] Failed adjacent fetch from {target_node}: {e}")
-                    # Fallback to standard Chord lookup for remaining clusters
-                    for cid in cluster_ids:
-                        cid_hash = self.get_cluster_hash(cid)
-                        fallback_node = self.find_successor(str(cid_hash))
-                        if fallback_node != target_node:
-                            if fallback_node not in pending_queries:
-                                pending_queries[fallback_node] = []
-                            pending_queries[fallback_node].append(cid)
+                    # Fallback: route each remaining cluster by a direct Chord lookup.
+                    for cid in requested:
+                        fallback_node = self.find_successor(str(self.get_cluster_hash(cid)))
+                        pending_queries.setdefault(fallback_node, []).append(cid)
+                    continue
+
+            results.extend(resp["results"])
+            # Clusters this node forwarded onward are not yet served; every other
+            # requested cluster WAS served here -> mark it so it is never re-fetched
+            # or dropped.
+            forwarded = set()
+            for next_node, cids in resp["next_queries"].items():
+                forwarded.update(cids)
+                # Queue EVERY forward target, INCLUDING the entry node itself: the
+                # loop serves self.address locally. The old skip here silently
+                # discarded any cluster whose chain pointed back at the entry --
+                # truncating the whole chain beyond it and depressing recall at
+                # wide fanout (the entry sits inside the probed arc).
+                pending_queries.setdefault(next_node, []).extend(cids)
+            served.update(c for c in requested if c not in forwarded)
         
         # Deduplicate
         unique_results = list(set(results))
@@ -625,14 +764,17 @@ class ChordNode:
                 del c["vector"]
                 
             c["similarity"] = sim
-            
-            ranked_results.append((sim, json.dumps(c)))
-            
-        # Sort descending by similarity
-        ranked_results.sort(key=lambda x: x[0], reverse=True)
-        
+
+            ranked_results.append((sim, str(c.get("course_id", "")), json.dumps(c)))
+
+        # Sort by similarity descending with a DETERMINISTIC tie-break on course_id.
+        # Near-duplicate courses produce exact similarity ties at the top-5 boundary;
+        # without the tie-break, tie order inherits the unordered set() iteration
+        # (per-process hash randomization) and results differ across runs/processes.
+        ranked_results.sort(key=lambda x: (-x[0], x[1]))
+
         # Return top 5
-        final_list = [c_str for sim, c_str in ranked_results[:5]]
+        final_list = [c_str for sim, cid, c_str in ranked_results[:5]]
         if return_trace:
             return final_list, total_hops, trace
         if return_hops:
@@ -646,7 +788,7 @@ class ChordNode:
             if self.predecessor and self.predecessor != self.address:
                 self.successors = [self.predecessor]
                 self.finger_table[0] = self.successor
-                self.sync_replicas_to_successors()
+                self.sync_replicas_to_successors(force=True)
             return
 
         alive_successor = None
@@ -679,8 +821,8 @@ class ChordNode:
             if not found_alive:
                 self.successors = [self.address]
                 self.finger_table[0] = self.address
-                
-            self.sync_replicas_to_successors()
+
+            self.sync_replicas_to_successors(force=True)
             return
             
         try:
@@ -739,13 +881,41 @@ class ChordNode:
             for k in keys_to_delete:
                 del self.storage[k]
 
+    FINGERS_PER_ROUND = 8
+
     def fix_fingers(self):
-        i = random.randint(0, self.m - 1)
-        target_id = (self.node_id + (2 ** i)) % (2 ** self.m)
-        try:
-            self.finger_table[i] = self.find_successor(str(target_id))
-        except Exception:
-            pass
+        """Sequential finger repair (the Chord paper's next-counter variant, not
+        random sampling), several entries per stabilization round. Tracks whether
+        the last COMPLETE sweep over all m fingers changed anything, which gives a
+        sound per-node convergence signal: a full sweep touched every finger and
+        none moved. Random sampling cannot provide this (a stale finger can stay
+        unsampled for arbitrarily many rounds)."""
+        if not hasattr(self, "_fix_next"):
+            self._fix_next = 0
+            self._sweep_changes = 0
+            self._last_sweep_changes = -1  # no full sweep completed yet
+        for _ in range(self.FINGERS_PER_ROUND):
+            i = self._fix_next
+            target_id = (self.node_id + (2 ** i)) % (2 ** self.m)
+            try:
+                new_finger = self.find_successor(str(target_id))
+                if self.finger_table[i] != new_finger:
+                    self.finger_table[i] = new_finger
+                    self._sweep_changes += 1
+            except Exception:
+                # A failed lookup is not evidence of stability: count it as a change
+                # so this sweep cannot be reported clean.
+                self._sweep_changes += 1
+            self._fix_next += 1
+            if self._fix_next >= self.m:
+                self._fix_next = 0
+                self._last_sweep_changes = self._sweep_changes
+                self._sweep_changes = 0
+
+    def is_finger_stable(self) -> bool:
+        """True once the most recent complete fix_fingers sweep over all m entries
+        produced zero changes -- this node's routing state has reached a fixpoint."""
+        return getattr(self, "_last_sweep_changes", -1) == 0
 
     def check_predecessor(self):
         if self.predecessor and self.predecessor != self.address:
@@ -777,16 +947,22 @@ class ChordNode:
                     # Cool down CPU load
                     if self.query_load > 0:
                         self.query_load -= 1
+                    # Periodic shard snapshot (~every 10 rounds, only if dirty;
+                    # no-op unless SHARD_DIR is set).
+                    self._worker_ticks = getattr(self, "_worker_ticks", 0) + 1
+                    if self._worker_ticks % 10 == 0:
+                        self._save_shard()
                 except Exception:
                     pass
                 time.sleep(self.stabilize_interval)
-                
+
         self.worker_thread = threading.Thread(target=periodic_worker, daemon=True)
         self.worker_thread.start()
         print(f"Node started on {self.address} (ID: {self.node_id})")
 
     def stop(self):
         self.shutdown_event.set()
+        self._save_shard()  # final snapshot on graceful shutdown (no-op if disabled)
         if self.server:
             self.server.shutdown()
             self.server.server_close()

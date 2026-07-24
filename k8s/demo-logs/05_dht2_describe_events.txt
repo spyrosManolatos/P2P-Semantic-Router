@@ -1,0 +1,94 @@
+Name:             dht-2
+Namespace:        dht
+Priority:         0
+Service Account:  default
+Node:             docker-desktop/192.168.65.3
+Start Time:       Sat, 18 Jul 2026 18:58:38 +0300
+Labels:           app=dht
+                  apps.kubernetes.io/pod-index=2
+                  controller-revision-hash=dht-694d758998
+                  statefulset.kubernetes.io/pod-name=dht-2
+Annotations:      <none>
+Status:           Running
+IP:               10.1.0.20
+IPs:
+  IP:           10.1.0.20
+Controlled By:  StatefulSet/dht
+Containers:
+  node:
+    Container ID:  docker://bd00d72cd7a7d06e9c4ef196db1b0e7f263861fb83d2f63e3a60f0ed18a0c0ee
+    Image:         p2p-semantic-router:latest
+    Image ID:      docker-pullable://p2p-semantic-router@sha256:8ca3b0561ff4408a53bde541162209fcc138e13ba9a7abc77bdcdeaa6778cd7c
+    Port:          5000/TCP
+    Host Port:     0/TCP
+    Command:
+      /bin/sh
+      -c
+    Args:
+      ORD="${POD_NAME##*-}"
+      if [ "$ORD" = "0" ]; then BOOT=""; else BOOT="--bootstrap dht-0.dht:5000"; fi
+      exec python containerized_environment/app_vnodes.py \
+        --arch semantic --ip "${POD_NAME}.dht" --port 5000 \
+        --num_vnodes "${NUM_VNODES}" $BOOT
+      
+    State:          Running
+      Started:      Sat, 18 Jul 2026 18:58:41 +0300
+    Ready:          True
+    Restart Count:  0
+    Limits:
+      memory:  1Gi
+    Requests:
+      cpu:      250m
+      memory:   512Mi
+    Readiness:  exec [python -c import os, sys, socket, xmlrpc.client
+socket.setdefaulttimeout(3)
+n = int(os.environ.get("NUM_VNODES", "20"))
+for p in range(5000, 5000 + n):
+    s = xmlrpc.client.ServerProxy(f"http://127.0.0.1:{p}", allow_none=True)
+    if not s.is_finger_stable():
+        sys.exit(1)
+sys.exit(0)
+] delay=30s timeout=8s period=10s #success=1 #failure=60
+    Environment:
+      POD_NAME:     dht-2 (v1:metadata.name)
+      NUM_VNODES:   20
+      CONFIG_PATH:  /app/containerized_environment/config.prod.yaml
+      SHARD_DIR:    /shards
+    Mounts:
+      /app/containerized_environment/config.prod.yaml from config (rw,path="config.prod.yaml")
+      /shards from shards (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-nsbp5 (ro)
+Conditions:
+  Type                        Status
+  PodReadyToStartContainers   True 
+  Initialized                 True 
+  Ready                       True 
+  ContainersReady             True 
+  PodScheduled                True 
+Volumes:
+  shards:
+    Type:       PersistentVolumeClaim (a reference to a PersistentVolumeClaim in the same namespace)
+    ClaimName:  shards-dht-2
+    ReadOnly:   false
+  config:
+    Type:      ConfigMap (a volume populated by a ConfigMap)
+    Name:      dht-config
+    Optional:  false
+  kube-api-access-nsbp5:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  3607
+    ConfigMapName:           kube-root-ca.crt
+    Optional:                false
+    DownwardAPI:             true
+QoS Class:                   Burstable
+Node-Selectors:              <none>
+Tolerations:                 node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                             node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+Events:
+  Type     Reason     Age                  From               Message
+  ----     ------     ----                 ----               -------
+  Normal   Scheduled  12m                  default-scheduler  Successfully assigned dht/dht-2 to docker-desktop
+  Normal   Pulled     12m                  kubelet            spec.containers{node}: Container image "p2p-semantic-router:latest" already present on machine and can be accessed by the pod
+  Normal   Created    12m                  kubelet            spec.containers{node}: Container created
+  Normal   Started    12m                  kubelet            spec.containers{node}: Container started
+  Warning  Unhealthy  7m6s (x34 over 12m)  kubelet            spec.containers{node}: Readiness probe failed:

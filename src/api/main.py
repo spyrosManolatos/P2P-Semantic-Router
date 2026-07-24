@@ -224,6 +224,7 @@ DEMO_PAGE = """<!doctype html>
   th, td { text-align: left; padding: .3rem .5rem; border-bottom: 1px solid var(--line); }
   th { color: var(--ink-2); font-weight: 600; }
   code { font-size: .85em; }
+  .paths div { font-size: .92rem; margin: .15rem 0; }
   details { margin: .5rem 0; }
   summary { cursor: pointer; }
   .legend { display: flex; gap: 1.2rem; font-size: .85rem; color: var(--ink-2); margin: .4rem 0; }
@@ -276,6 +277,9 @@ DEMO_PAGE = """<!doctype html>
 const $ = id => document.getElementById(id);
 const shortId = s => '\\u2026' + BigInt(s).toString(16).slice(-6);
 const shortName = a => a.split(':')[0];
+// One lookup per cluster (clustered DHT) or a single synthetic one (semantic router)
+const allLookups = rt => rt.lookups ||
+  [{ cluster_id: rt.primary_cluster, owner: rt.primary_owner, hops: rt.chord_hops_to_owner, path: rt.lookup_path || [] }];
 
 function pt(pct, r) {
   const a = (pct / 100) * 2 * Math.PI - Math.PI / 2;   // 0% at 12 o'clock, clockwise
@@ -312,24 +316,25 @@ function drawRing(d) {
       <text x="${lx}" y="${ly + 12}" text-anchor="middle" class="lbl2">${n.ring_pct}%</text>`);
   }
 
-  // Dashed chords from the entry node to each cluster owner. The semantic
-  // router has one lookup; the clustered DHT has one per cluster (SHA-1
-  // scatters them), so multiple lines fan out across the ring.
+  // Dashed polylines tracing each lookup's actual path (entry -> hop nodes ->
+  // owner). The semantic router has one lookup; the clustered DHT has one per
+  // cluster (SHA-1 scatters them). Identical paths are merged into one line.
   const rt = d.routing;
-  const lookups = rt.lookups || [{ cluster_id: rt.primary_cluster, owner: rt.primary_owner, hops: rt.chord_hops_to_owner }];
-  const byOwner = {};
+  const lookups = allLookups(rt);
+  const byChain = {};
   for (const lk of lookups) {
-    if (lk.owner === rt.entry_node || pos[lk.owner] == null) continue;
-    (byOwner[lk.owner] = byOwner[lk.owner] || []).push(lk);
+    const chain = [...new Set([...(lk.path || []), lk.owner])].filter(a => pos[a] != null);
+    if (chain.length < 2) continue;
+    const key = chain.join('|');
+    (byChain[key] = byChain[key] || { chain, labels: [] }).labels
+      .push(`C${lk.cluster_id}: ${lk.hops} hop${lk.hops === 1 ? '' : 's'}`);
   }
-  if (pos[rt.entry_node] != null) {
-    for (const [owner, lks] of Object.entries(byOwner)) {
-      const [x1, y1] = pt(pos[rt.entry_node], R);
-      const [x2, y2] = pt(pos[owner], R);
-      const label = lks.map(lk => `C${lk.cluster_id}: ${lk.hops} hop${lk.hops === 1 ? '' : 's'}`).join(' \\u00b7 ');
-      svg.unshift(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--ink-2)" stroke-width="1.5" stroke-dasharray="5 4"/>
-        <text x="${(x1 + x2) / 2}" y="${(y1 + y2) / 2 - 6}" text-anchor="middle" class="lbl2">${label}</text>`);
-    }
+  for (const { chain, labels } of Object.values(byChain)) {
+    const pts = chain.map(a => pt(pos[a], R));
+    const poly = pts.map(p => p.join(',')).join(' ');
+    const [mx, my] = [(pts[0][0] + pts[1][0]) / 2, (pts[0][1] + pts[1][1]) / 2];
+    svg.unshift(`<polyline points="${poly}" fill="none" stroke="var(--ink-2)" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <text x="${mx}" y="${my - 6}" text-anchor="middle" class="lbl2">${labels.join(' \\u00b7 ')}</text>`);
   }
   $('ring').innerHTML = svg.join('');
 }
@@ -345,14 +350,26 @@ function routeHtml(d) {
     ${perCluster ? `<td>${c.lookup_hops}</td>` : ''}
   </tr>`).join('');
   const contacted = rt.nodes_contacted.map(n => `${shortName(n.node)} (C${n.clusters.join(', C')})`).join(' \\u2192 ');
-  const path = [...new Set(rt.lookup_path || [])];
-  const pathStr = path.map(shortName).join(' \\u2192 ') + ` \\u2192 <b>${shortName(rt.primary_owner)}</b>`;
+  const lookups = allLookups(rt);
+
+  // Per-lookup paths, plus per-node maps of which jumps were taken from it
+  // (and for which clusters) and which clusters it answered via its successor.
+  const pathsHtml = lookups.map(lk => {
+    const p = (lk.path || []).map(shortName).join(' \\u2192 ');
+    return `<div>C${lk.cluster_id}: ${p} \\u2192 <b>${shortName(lk.owner)}</b> <span class="muted">(${lk.hops} hop${lk.hops === 1 ? '' : 's'})</span></div>`;
+  }).join('');
+  const jumps = {}, answered = {};
+  for (const lk of lookups) {
+    const p = lk.path || [];
+    for (let i = 0; i + 1 < p.length; i++) {
+      ((jumps[p[i]] = jumps[p[i]] || {})[p[i + 1]] = jumps[p[i]][p[i + 1]] || []).push('C' + lk.cluster_id);
+    }
+    if (p.length) (answered[p[p.length - 1]] = answered[p[p.length - 1]] || []).push('C' + lk.cluster_id);
+  }
 
   const fingerHtml = Object.keys(rt.finger_tables || {}).map(addr => {
     const ft = rt.finger_tables[addr];
     if (!ft) return '';
-    const idx = path.indexOf(addr);
-    const nextHop = idx >= 0 && idx + 1 < path.length ? path[idx + 1] : null;
     // Aggregate the 160 fingers per distinct target node; the highest finger
     // preceding the lookup target is the jump closest_preceding_node picks.
     const agg = {};
@@ -363,17 +380,17 @@ function routeHtml(d) {
       if (b > n.top) { n.top = b; n.topStart = g.start_pct; }
     }
     const ftRows = Object.entries(agg).sort((x, y) => y[1].top - x[1].top).map(([node, a]) => {
-      const taken = nextHop && node === nextHop;
+      const takenFor = (jumps[addr] || {})[node];
       const self = node === addr;
-      return `<tr${taken ? ' style="font-weight:700"' : ''}>
-        <td>${shortName(node)}${self ? ' (itself)' : ''}${taken ? ' \\u2190 jump taken' : ''}</td>
+      return `<tr${takenFor ? ' style="font-weight:700"' : ''}>
+        <td>${shortName(node)}${self ? ' (itself)' : ''}${takenFor ? ` \\u2190 jump taken (${takenFor.join(', ')})` : ''}</td>
         <td>${a.count}</td>
         <td>i = ${a.top}</td>
         <td>${a.topStart}%</td>
       </tr>`;
     }).join('');
     return `<details open>
-      <summary><b>${shortName(addr)}</b> finger table${idx === path.length - 1 ? ' (answered via its successor \\u2014 no jump needed)' : ''}</summary>
+      <summary><b>${shortName(addr)}</b> finger table${answered[addr] ? ` (answered ${answered[addr].join(', ')} via its successor)` : ''}</summary>
       <table>
         <tr><th>Points to</th><th># fingers</th><th>Highest finger</th><th>It covers from</th></tr>
         ${ftRows}
@@ -386,7 +403,8 @@ function routeHtml(d) {
     <p>Entry node <b>${rt.entry_node}</b> <code>${shortId(rt.entry_node_id)}</code> (ring ${rt.entry_node_ring_pct}%)
     vectorized the query and picked cluster <b>C${rt.primary_cluster}</b>${rt.clusters.length > 1 ? ` (+${rt.clusters.length - 1} adjacent)` : ''}.
     Chord lookup reached owner <b>${shortName(rt.primary_owner)}</b> in <b>${rt.chord_hops_to_owner}</b> hop(s).</p>
-    <p class="muted">${rt.lookups ? 'Primary lookup path' : 'Lookup path'}: ${pathStr}</p>
+    <p class="muted" style="margin-bottom:.2rem">Lookup path${lookups.length > 1 ? 's (one Chord lookup per cluster)' : ''}:</p>
+    <div class="paths">${pathsHtml}</div>
     <table>
       <tr><th>Cluster (\\u2605 = primary)</th><th>Hash</th><th>Ring position</th><th>Served by</th>${perCluster ? '<th>Lookup hops</th>' : ''}</tr>
       ${rows}

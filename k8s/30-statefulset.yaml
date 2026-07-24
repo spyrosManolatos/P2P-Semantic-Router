@@ -1,0 +1,103 @@
+# The ring: 5 pods x NUM_VNODES=20 virtual nodes = 100 Chord identities.
+#
+# Why a StatefulSet (and not a Deployment): ring position = SHA-1(address), so
+# identities MUST be stable. StatefulSet guarantees pod dht-3 is always named
+# dht-3, resolves as dht-3.dht, and remounts its own persistent volume -- so a
+# respawned pod returns to the SAME ring positions with its shard intact
+# (warm start), and the join migration reconciles any delta.
+#
+# Bootstrap: ordinal 0 initializes the ring; every other pod joins via
+# dht-0.dht:5000. OrderedReady pod management means dht-1 starts only after
+# dht-0 is Ready -- which, combined with the readiness probe below, serializes
+# joins until each pod's fingers have converged.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: dht
+  namespace: dht
+spec:
+  serviceName: dht          # -> per-pod DNS via the headless Service
+  replicas: 5
+  podManagementPolicy: OrderedReady
+  selector:
+    matchLabels:
+      app: dht
+  template:
+    metadata:
+      labels:
+        app: dht
+    spec:
+      terminationGracePeriodSeconds: 15   # allow the final shard snapshot on stop()
+      containers:
+        - name: node
+          image: p2p-semantic-router:latest
+          imagePullPolicy: Never          # Docker Desktop: use the locally built image
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              ORD="${POD_NAME##*-}"
+              if [ "$ORD" = "0" ]; then BOOT=""; else BOOT="--bootstrap dht-0.dht:5000"; fi
+              exec python containerized_environment/app_vnodes.py \
+                --arch semantic --ip "${POD_NAME}.dht" --port 5000 \
+                --num_vnodes "${NUM_VNODES}" $BOOT
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: NUM_VNODES
+              value: "20"
+            - name: CONFIG_PATH
+              value: /app/containerized_environment/config.prod.yaml
+            - name: SHARD_DIR              # activates warm-start shard persistence
+              value: /shards
+          ports:
+            - containerPort: 5000
+          # Chord-aware readiness: the pod receives no traffic until EVERY vnode
+          # it hosts reports a converged finger table (is_finger_stable = the
+          # sequential fix_fingers sweep changed nothing). The benchmark's
+          # convergence gate, promoted to an infrastructure guarantee.
+          readinessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - |
+                  import os, sys, socket, xmlrpc.client
+                  socket.setdefaulttimeout(3)
+                  n = int(os.environ.get("NUM_VNODES", "20"))
+                  for p in range(5000, 5000 + n):
+                      s = xmlrpc.client.ServerProxy(f"http://127.0.0.1:{p}", allow_none=True)
+                      if not s.is_finger_stable():
+                          sys.exit(1)
+                  sys.exit(0)
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 8
+            failureThreshold: 60          # large rings converge slowly; be patient
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              memory: "1Gi"
+          volumeMounts:
+            - name: shards
+              mountPath: /shards
+            - name: config
+              mountPath: /app/containerized_environment/config.prod.yaml
+              subPath: config.prod.yaml
+      volumes:
+        - name: config
+          configMap:
+            name: dht-config
+  # One PersistentVolumeClaim PER POD, bound to its identity: dht-3 always
+  # remounts data-dht-3, so its 20 vnodes warm-start from their own shards.
+  volumeClaimTemplates:
+    - metadata:
+        name: shards
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi

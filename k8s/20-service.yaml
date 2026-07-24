@@ -1,0 +1,29 @@
+# HEADLESS Service (clusterIP: None): no load balancing, no virtual IP -- its
+# only job is per-pod DNS. Each StatefulSet pod becomes resolvable as
+#   dht-<ordinal>.dht.dht.svc  (short form inside the namespace: dht-<ordinal>.dht)
+# This is what gives every ring identity a STABLE address, and the stable
+# address is what pins its SHA-1 ring position across restarts. A normal
+# (load-balanced) Service would be wrong here: peers must dial SPECIFIC nodes,
+# never "any node".
+#
+# publishNotReadyAddresses: true is REQUIRED here, not optional. Our readiness
+# probe gates on ring/finger convergence -- but vnodes can only converge by
+# resolving and joining via dht-0.dht in the first place. Without this flag,
+# Kubernetes only publishes a pod's DNS record once it is already Ready,
+# creating a deadlock: not Ready -> no DNS -> can't join -> never converges ->
+# never Ready. This is the standard, documented fix for StatefulSet governing
+# services whose members must discover each other before passing readiness.
+apiVersion: v1
+kind: Service
+metadata:
+  name: dht
+  namespace: dht
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: dht
+  ports:
+    - name: xmlrpc-base
+      port: 5000
+      targetPort: 5000

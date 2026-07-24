@@ -1,0 +1,6 @@
+NAME    READY   STATUS    RESTARTS   AGE   IP          NODE             NOMINATED NODE   READINESS GATES
+dht-0   1/1     Running   0          36m   10.1.0.9    docker-desktop   <none>           <none>
+dht-1   1/1     Running   0          37m   10.1.0.8    docker-desktop   <none>           <none>
+dht-2   1/1     Running   0          12m   10.1.0.20   docker-desktop   <none>           <none>
+dht-3   1/1     Running   0          32m   10.1.0.11   docker-desktop   <none>           <none>
+dht-4   1/1     Running   0          30m   10.1.0.12   docker-desktop   <none>           <none>

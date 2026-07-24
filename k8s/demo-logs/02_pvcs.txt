@@ -1,0 +1,6 @@
+NAME           STATUS   VOLUME                                     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
+shards-dht-0   Bound    pvc-d4fd07d9-101d-4984-94ba-609f5a36158a   1Gi        RWO            hostpath       <unset>                 38m
+shards-dht-1   Bound    pvc-293bfdcb-83a5-46d3-8ef7-7c79d945fab9   1Gi        RWO            hostpath       <unset>                 37m
+shards-dht-2   Bound    pvc-cac0533d-7f38-4693-b641-04f864e31c03   1Gi        RWO            hostpath       <unset>                 34m
+shards-dht-3   Bound    pvc-d22038a1-3cee-4b8e-a8d0-00d23a14c7e0   1Gi        RWO            hostpath       <unset>                 32m
+shards-dht-4   Bound    pvc-429ea88b-09fc-46b6-a0f4-78a984ce0877   1Gi        RWO            hostpath       <unset>                 30m

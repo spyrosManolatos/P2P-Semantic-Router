@@ -7,3 +7,4 @@ data/raw/udemy_courses.csv
 data/raw/normalized_kaggle_courses.json
 data/models/centroids.json
 data/models/kaggle_centroids.json
+data/models/kaggle_centroids_k5500.json

@@ -1,0 +1,8 @@
+NAME    READY   STATUS    RESTARTS      AGE
+dht-0   1/1     Running   1 (50m ago)   15h
+dht-1   1/1     Running   1 (50m ago)   15h
+dht-2   1/1     Running   1 (50m ago)   15h
+dht-3   1/1     Running   1 (50m ago)   15h
+dht-4   1/1     Running   1 (50m ago)   15h
+dht-5   1/1     Running   0             30m
+dht-6   1/1     Running   0             23m

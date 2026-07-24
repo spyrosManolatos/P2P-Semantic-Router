@@ -1,0 +1,112 @@
+============================================================
+Starting SEMANTIC DHT container 'dht-5.dht' with 20 virtual node(s) on ports 5000..5019
+Joining ring via bootstrap: dht-0.dht:5000
+============================================================
+  [vnode 0] dht-5.dht:5000  ->  bootstrap=dht-0.dht:5000
+[dht-5.dht:5000] Loaded artifact: k=80, d=1000
+Node started on dht-5.dht:5000 (ID: 1195159883694417146939383035407834582692937768358)
+[dht-5.dht:5000] Requesting data migration from successor dht-3.dht:5013...
+[dht-5.dht:5000] Data migration complete. Received 0 clusters.
+  [vnode 1] dht-5.dht:5001  ->  bootstrap=dht-0.dht:5000
+[dht-5.dht:5001] Loaded artifact: k=80, d=1000
+Node started on dht-5.dht:5001 (ID: 149083613601364655354334588779195366826560373802)
+[dht-5.dht:5001] Requesting data migration from successor dht-1.dht:5010...
+[dht-5.dht:5001] Data migration complete. Received 0 clusters.
+  [vnode 2] dht-5.dht:5002  ->  bootstrap=dht-0.dht:5000
+[dht-5.dht:5002] Loaded artifact: k=80, d=1000
+Node started on dht-5.dht:5002 (ID: 994072576973056221414113789569498608582898161959)
+[dht-5.dht:5002] Requesting data migration from successor dht-0.dht:5016...
+[dht-5.dht:5002] Data migration complete. Received 1 clusters.
+  [vnode 3] dht-5.dht:5003  ->  bootstrap=dht-0.dht:5000
+[dht-5.dht:5003] Loaded artifact: k=80, d=1000
+Node started on dht-5.dht:5003 (ID: 586405653114434464181292379060322219073047229927)
+[dht-5.dht:5003] Requesting data migration from successor dht-2.dht:5015...
+[dht-5.dht:5003] Data migration complete. Received 0 clusters.
+  [vnode 4] dht-5.dht:5004  ->  bootstrap=dht-0.dht:5000
+[dht-5.dht:5004] Loaded artifact: k=80, d=1000
+Node started on dht-5.dht:5004 (ID: 660936507535122676233449276554891657234563832953)
+[dht-5.dht:5004] Requesting data migration from successor dht-3.dht:5006...
+[dht-5.dht:5004] Data migration complete. Received 1 clusters.
+  [vnode 5] dht-5.dht:5005  ->  bootstrap=dht-0.dht:5000
+[dht-5.dht:5005] Loaded artifact: k=80, d=1000
+Node started on dht-5.dht:5005 (ID: 1434433114561965259911243288239390991579556938585)
+[dht-5.dht:5005] Requesting data migration from successor dht-1.dht:5018...
+[dht-5.dht:5005] Data migration complete. Received 0 clusters.
+  [vnode 6] dht-5.dht:5006  ->  bootstrap=dht-0.dht:5000
+[dht-5.dht:5006] Loaded artifact: k=80, d=1000
+Node started on dht-5.dht:5006 (ID: 1189463211884509032276337312493283806154009216320)
+[dht-5.dht:5006] Requesting data migration from successor dht-5.dht:5000...
+[dht-5.dht:5000] Migrated clusters to new node dht-5.dht:5006. Deleted local replicas for: []
+[dht-5.dht:5006] Data migration complete. Received 0 clusters.
+  [vnode 7] dht-5.dht:5007  ->  bootstrap=dht-0.dht:5000
+[dht-5.dht:5007] Loaded artifact: k=80, d=1000
+Node started on dht-5.dht:5007 (ID: 1410942157964933089135338435444772999494687723978)
+[dht-5.dht:5007] Requesting data migration from successor dht-5.dht:5005...
+[dht-5.dht:5005] Migrated clusters to new node dht-5.dht:5007. Deleted local replicas for: []
+[dht-5.dht:5007] Data migration complete. Received 0 clusters.
+  [vnode 8] dht-5.dht:5008  ->  bootstrap=dht-0.dht:5000
+[dht-5.dht:5008] Loaded artifact: k=80, d=1000
+Node started on dht-5.dht:5008 (ID: 566948961911796382198113490157159775018826047774)
+[dht-5.dht:5008] Requesting data migration from successor dht-4.dht:5010...
+[dht-5.dht:5008] Data migration complete. Received 1 clusters.
+  [vnode 9] dht-5.dht:5009  ->  bootstrap=dht-0.dht:5000
+[dht-5.dht:5009] Loaded artifact: k=80, d=1000
+Node started on dht-5.dht:5009 (ID: 407790774747007688530253407427879633739382677895)
+[dht-5.dht:5009] Requesting data migration from successor dht-4.dht:5007...
+[dht-5.dht:5009] Data migration complete. Received 1 clusters.
+  [vnode 10] dht-5.dht:5010  ->  bootstrap=dht-0.dht:5000
+[dht-5.dht:5010] Loaded artifact: k=80, d=1000
+Node started on dht-5.dht:5010 (ID: 540004221483393411470837440184622136305214465904)
+[dht-5.dht:5010] Requesting data migration from successor dht-3.dht:5017...
+[dht-5.dht:5010] Data migration complete. Received 1 clusters.
+  [vnode 11] dht-5.dht:5011  ->  bootstrap=dht-0.dht:5000
+[dht-5.dht:5011] Loaded artifact: k=80, d=1000
+Node started on dht-5.dht:5011 (ID: 202443904140449040698668200873092919785750660980)
+[dht-5.dht:5011] Requesting data migration from successor dht-1.dht:5010...
+[dht-5.dht:5011] Data migration complete. Received 2 clusters.
+  [vnode 12] dht-5.dht:5012  ->  bootstrap=dht-0.dht:5000
+[dht-5.dht:5012] Loaded artifact: k=80, d=1000
+Node started on dht-5.dht:5012 (ID: 1088299332711364689461027649170054991552691468542)
+[dht-5.dht:5012] Requesting data migration from successor dht-4.dht:5011...
+[dht-5.dht:5012] Data migration complete. Received 0 clusters.
+  [vnode 13] dht-5.dht:5013  ->  bootstrap=dht-0.dht:5000
+[dht-5.dht:5013] Loaded artifact: k=80, d=1000
+Node started on dht-5.dht:5013 (ID: 134095435488752717936175057645337671227091816592)
+[dht-5.dht:5013] Requesting data migration from successor dht-1.dht:5016...
+[dht-5.dht:5013] Data migration complete. Received 0 clusters.
+  [vnode 14] dht-5.dht:5014  ->  bootstrap=dht-0.dht:5000
+[dht-5.dht:5014] Loaded artifact: k=80, d=1000
+Node started on dht-5.dht:5014 (ID: 837992031553138502147604628574997018630350368042)
+[dht-5.dht:5014] Requesting data migration from successor dht-4.dht:5004...
+[dht-5.dht:5014] Data migration complete. Received 0 clusters.
+  [vnode 15] dht-5.dht:5015  ->  bootstrap=dht-0.dht:5000
+[dht-5.dht:5015] Loaded artifact: k=80, d=1000
+Node started on dht-5.dht:5015 (ID: 1180347781917811251978161761024415429450489747793)
+[dht-5.dht:5015] Requesting data migration from successor dht-2.dht:5004...
+[dht-5.dht:5015] Data migration complete. Received 0 clusters.
+  [vnode 16] dht-5.dht:5016  ->  bootstrap=dht-0.dht:5000
+[dht-5.dht:5016] Loaded artifact: k=80, d=1000
+Node started on dht-5.dht:5016 (ID: 478680224959798809198220713521121849269600240382)
+[dht-5.dht:5016] Requesting data migration from successor dht-3.dht:5018...
+[dht-5.dht:5016] Data migration complete. Received 3 clusters.
+  [vnode 17] dht-5.dht:5017  ->  bootstrap=dht-0.dht:5000
+[dht-5.dht:5017] Loaded artifact: k=80, d=1000
+Node started on dht-5.dht:5017 (ID: 700793846692210375652819966819027872613393460299)
+[dht-5.dht:5017] Requesting data migration from successor dht-3.dht:5006...
+[dht-5.dht:5017] Data migration complete. Received 1 clusters.
+  [vnode 18] dht-5.dht:5018  ->  bootstrap=dht-0.dht:5000
+[dht-5.dht:5018] Loaded artifact: k=80, d=1000
+Node started on dht-5.dht:5018 (ID: 117704737033046871756312864046425634357736337307)
+[dht-5.dht:5018] Requesting data migration from successor dht-5.dht:5013...
+[dht-5.dht:5013] Migrated clusters to new node dht-5.dht:5018. Deleted local replicas for: []
+[dht-5.dht:5018] Data migration complete. Received 0 clusters.
+  [vnode 19] dht-5.dht:5019  ->  bootstrap=dht-0.dht:5000
+[dht-5.dht:5019] Loaded artifact: k=80, d=1000
+Node started on dht-5.dht:5019 (ID: 829128875950166010343922562457596371399579005180)
+[dht-5.dht:5019] Requesting data migration from successor dht-5.dht:5014...
+[dht-5.dht:5014] Migrated clusters to new node dht-5.dht:5019. Deleted local replicas for: []
+[dht-5.dht:5019] Data migration complete. Received 0 clusters.
+Container running 20 virtual node(s). Press Ctrl+C to terminate.
+[dht-5.dht:5004] Migrated clusters to new node dht-6.dht:5001. Deleted local replicas for: []
+[dht-5.dht:5017] Migrated clusters to new node dht-6.dht:5011. Deleted local replicas for: ['35']
+[dht-5.dht:5013] Migrated clusters to new node dht-6.dht:5013. Deleted local replicas for: []

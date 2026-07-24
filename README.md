@@ -4,6 +4,13 @@ This project is a Proof of Concept (v1.0) for a highly scalable, decentralized V
 
 Unlike traditional categorical DHTs that rely on random SHA-1 hashing, this architecture mathematically maps K-Means semantic clusters across the circular ring. This ensures that semantically similar data is hosted in identical or adjacent network regions, enabling powerful distributed fanout queries.
 
+## 🎓 Academic Context
+
+This system is the implementation for the diploma thesis **"Design of a Decentralized Vector Database for MLOps: An Approach Based on Chord DHT and Semantic Distribution"** (_«Σχεδιασμός Αποκεντρωμένης Διανυσματικής Βάσης Δεδομένων για MLOps: Μια Προσέγγιση Βασισμένη σε Chord DHT και Σημασιολογική Κατανομή»_), submitted to the **Computer Engineering and Informatics Department (CEID), University of Patras**.
+
+- **Author:** Spyridon Manolatos
+- **Supervisor:** Gerasimos Vonitsanos
+
 ## 📂 Directory Layout
 
 ```text
@@ -37,8 +44,17 @@ Unlike traditional categorical DHTs that rely on random SHA-1 hashing, this arch
 ├── containerized_environment/ # Distributed Containerized environment configuration & files
 │   ├── Dockerfile             # Node container definition
 │   ├── docker-compose.yml     # Distributed cluster setup and client runner
-│   ├── app.py                 # Node service launcher
-│   └── config.prod.yaml       # Configuration for Docker production run
+│   ├── app.py                 # Node service launcher (one ring identity per process)
+│   ├── app_vnodes.py          # Virtual-node launcher (many ring identities per process)
+│   ├── docker-compose.vnodes.yml # Isolated large-ring (25-140 node) topology
+│   ├── config.prod.yaml       # Configuration for Docker production run
+│   └── config.vnodes.yaml     # Configuration for the virtual-node scaling study (K=4096)
+├── k8s/                       # Kubernetes deployment (StatefulSet-based ring, see k8s/README.md)
+├── docs/                      # Project documentation (pipeline notes, scripts.md)
+├── run_all_benchmarks_fullcorpus.sh # 5-node suite: characterize/scale/fault/join/disaster (see docs/scripts.md)
+├── run_hops_scale_async.sh    # Headline routing-hops scaling result (50/100-node virtual ring)
+├── run_vnode_disaster.sh      # 100-node uniform-disaster distribution
+├── run_doomed_scenario.sh     # 100-node worst-case scenario
 ├── config.yaml                # Decoupled network and database parameters file
 └── README.md                  # Main project overview and run instructions
 ```
@@ -60,7 +76,8 @@ The system is tested using a real-world dataset of Udemy courses sourced from Ka
 
 1. **Preprocessing (`src/ml/train_centroids.py` / Data Loaders):** The raw Kaggle dataset is parsed, and course titles, descriptions, and categories are unified into a standard schema.
 2. **Feature Extraction:** The text is vectorized using TF-IDF (L2 Normalized) to represent the semantic meaning of the courses.
-3. **Clustering:** A standard K-Means model (k=50) is trained to group the vectors into semantic clusters, creating the `centroids.json` model that the DHT nodes will use to map data.
+3. **Clustering:** A standard K-Means model (K=80) is trained to group the vectors into semantic clusters.
+4. **Hierarchical Ordering (Dendrogram Leaf-Ordering):** K-Means alone assigns cluster IDs arbitrarily — ID 5 and ID 6 could be semantically unrelated. To fix this, the K centroids are fed into **agglomerative clustering** (`scipy.cluster.hierarchy.linkage`), and the resulting dendrogram is flattened into a single left-to-right order via `leaves_list`. Cluster IDs are then reassigned along this 1-D order, so that **numerically adjacent cluster IDs are guaranteed to be semantically adjacent** — the property the Semantic Router's linear ring mapping and its `nprobe` fanout both depend on. The final ordered centroids are written to `centroids.json`, the model the DHT nodes use to map data.
 
 ---
 
@@ -118,6 +135,8 @@ This script parses the raw dataset, builds a TF-IDF vocabulary, and trains the s
 ```bash
 python3 src/ml/train_centroids.py
 ```
+
+> **This synthetic `K=80` model is for the local threaded simulation.** The **containerized benchmarks** run on the full 98,104-course Kaggle corpus with a fine-grained `k=4096` model (`kaggle_centroids_k5500.json`) and exact full-corpus ground truth — a separate artifact set built by a different pipeline (`ingest_kaggle_data.py` → `train_centroids_bigk.py` → `gen_queries_bigk.py`). The complete step-by-step runbook to build those artifacts and run every benchmark lives in **[`docs/scripts.md`](docs/scripts.md)**.
 
 ---
 
@@ -199,6 +218,30 @@ docker compose down
 
 ---
 
+## ☸️ Kubernetes Deployment
+
+Beyond Docker Compose, the Semantic Router ring can be deployed on **Kubernetes** as a
+`StatefulSet` — stable per-pod network identity (`dht-0.dht`, `dht-1.dht`, …), a
+Chord-aware readiness probe (a pod receives no traffic until every virtual node it
+hosts reports a converged finger table), and per-pod persistent volumes that let a
+respawned pod **warm-start** from its own previously-stored shard instead of
+rejoining empty.
+
+This is a **deployment demonstration**, not a source of Chapter 6 measurements —
+Kubernetes pod DNS names hash to different ring positions than the Compose
+hostnames, so any routing-hops numbers would only match the reported results in
+shape, not value. Its evidence is *deployment behavior*: declarative elastic
+scaling (`kubectl scale`) with exact data conservation across the operation, and
+self-healing recovery (pod killed → Chord masks the outage within seconds →
+Kubernetes respawns the identity → the new pod reloads its data from its volume
+with zero loss), all verified against a live 100-identity ring with real
+injected data.
+
+Full manifests, a step-by-step walkthrough, and captured demo evidence live in
+**[`k8s/README.md`](k8s/README.md)** and **[`k8s/demo-logs/`](k8s/demo-logs/)**.
+
+---
+
 ## 🌐 Interactive Query Gateway (Demo Application)
 
 The project ships with a small **HTTP gateway application** that lets you run live similarity queries against a running cluster from the browser and *see the DHT routing happen*: which node the query entered from, which semantic clusters the entry node decided to probe, where nodes and clusters sit on the Chord identifier ring, the finger tables along the lookup path, and — most importantly — **how many hops each lookup took**.
@@ -221,6 +264,14 @@ The gateway is part of the compose stacks:
     docker compose up -d --build
     ```
 (`--build` is only needed the first time, or after changing `requirements.txt`; both stacks can run side by side for an A/B comparison.)
+
+> **Configuration note:** the gateway ([`src/api/main.py`](src/api/main.py)) is not hardcoded to
+> either architecture — which nodes it talks to (`DHT_NODES`, a comma-separated address list) and
+> its display name (`GATEWAY_TITLE`) are set via environment variables in each stack's
+> `docker-compose.yml`. That's why the same gateway code serves both the Semantic Router stack
+> (`DHT_NODES=bootstrap-node:5000,node-1:5000,...`) and the Clustered DHT stack
+> (`DHT_NODES=clustered-bootstrap:5000,clustered-node-1:5000,...,GATEWAY_TITLE=P2P Clustered DHT`)
+> without any code changes — only the compose file's environment differs.
 
 ### 2. Inject data
 Node storage is **in-memory**, so the ring starts empty after every `up`/restart. Fill it with the Kaggle course dataset:
@@ -248,6 +299,8 @@ The raw API is also available: `POST /query` (`{"query": "...", "nprobe": 1-10, 
 
 ## 📊 Benchmarks & Results
 
+> **📈 Full evaluation report:** [`data/benchmarks/README.md`](data/benchmarks/README.md) — the head-to-head **Semantic Router vs. Clustered DHT** comparison across all seven experiments (scaling, routing hops, fault tolerance, node join, sparse & dense disaster, doomed worst-case), each with its figure, the underlying numbers, and a **who-wins verdict**, plus a summary table and the honest bottom line.
+
 This project supports running comprehensive benchmarking suites in both the **local threaded simulation** and the **containerized Docker environment**. The results for each run are isolated into separate folders.
 
 ### 1. Local Threaded Evaluation
@@ -268,6 +321,61 @@ Run evaluations and generate plots for the local loopback DHT ring:
     _Outputs are saved to `data/benchmarks/results/local/` and `data/benchmarks/plots/local/`._
 
 ### 2. Containerized Cluster Evaluation
+
+#### Option A — Full suite via runner scripts (recommended)
+Four scripts at the project root each orchestrate one containerized benchmark end to end — bring up the ring, inject the full corpus, run `evaluate.py`, tear down, and (for the 5-node suite) regenerate the comparison charts:
+
+```bash
+./run_all_benchmarks_fullcorpus.sh      # 5-node suite: characterize, scale, fault, join, disaster
+./run_hops_scale_async.sh 20            # 100-node routing-hops headline (5 x 20 vnodes)
+./run_vnode_disaster.sh 20 30           # 100-node uniform-disaster distribution
+./run_doomed_scenario.sh 20 30          # 100-node worst-case scenario
+```
+
+All four run the async **semantic-router vs. clustered-DHT** comparison on the full 98,104-course corpus, against a shared exact full-corpus ground truth so the two architectures are measured identically.
+
+> **[`docs/scripts.md`](docs/scripts.md) is the single source of truth for running these** — the end-to-end runbook (prerequisites → the global centroid artifact every peer holds → query generation → each script), the per-experiment artifact matrix (corpus, peer count, topology, model, query file), and the ring-convergence notes.
+
+#### Option C — Async (FastAPI/httpx) architectures
+
+Each of the three architectures above has an async counterpart under `src/architectures/async_*` and `containerized_environment/async_*`: identical routing/replication/clustering logic, but the RPC transport is a persistent, connection-pooled `httpx.AsyncClient` talking to a FastAPI/uvicorn server (single asyncio event loop) instead of `xmlrpc.client`/`xmlrpc.server` (blocking connection-per-call, thread-per-request). This isolates transport overhead as an independent variable — `results_async_semantic.json` vs. `results_semantic.json` measures the *same* algorithm under two different RPC stacks.
+
+| Architecture | Sync (XML-RPC) | Async (FastAPI/httpx) | `--arch` flag |
+|---|---|---|---|
+| Standard DHT | `containerized_environment/standard_dht` | `containerized_environment/async_standard_dht` | `standard` / `async_standard` |
+| Clustered DHT | `containerized_environment/clustered_dht` | `containerized_environment/async_clustered_dht` | `clustered` / `async_clustered` |
+| Semantic Router | `containerized_environment/semantic_router` | `containerized_environment/async_semantic_router` | `semantic` / `async_semantic` |
+
+Each async stack mirrors its sync counterpart exactly (bootstrap + 4 workers + 1 idle `node-5` for the node-join experiment + a `--profile runner` driver), under `async-*`-prefixed container names and offset ports, so sync and async stacks can run side by side without colliding.
+
+```bash
+# 1. Build the shared image (only needed once, or after requirements.txt/app.py changes)
+cd containerized_environment/async_semantic_router
+docker compose build
+
+# 2. Bring up the ring (bootstrap + 4 workers + idle node-5)
+docker compose up -d async-bootstrap-node async-node-1 async-node-2 async-node-3 async-node-4 async-node-5
+
+# 3. Run the full benchmark suite (characterize, scale, fault, join, disaster)
+docker compose run --rm async-semantic-runner
+
+# 4. Tear down
+docker compose down
+```
+Swap `async_semantic_router`/`async-semantic-*` for `async_clustered_dht`/`async-clustered-*` or `async_standard_dht`/`async-standard-*` (matching service names from each folder's `docker-compose.yml`) to run the other two architectures.
+
+**Virtual-node hops sweep (async):** the async counterpart of `docker-compose.vnodes.yml`, driven by `containerized_environment/async_app_vnodes.py`:
+```bash
+ARCH=async_semantic NUM_VNODES=20 docker compose -f containerized_environment/docker-compose.async_vnodes.yml up -d --build
+docker compose -f containerized_environment/docker-compose.async_vnodes.yml run --rm runner \
+  -m src.benchmarks.containerized.evaluate --arch async_semantic --mode hops \
+  --containers av-bootstrap,av-node-1,av-node-2,av-node-3,av-node-4 --vnodes_per_container 20 \
+  --queries_file data/benchmarks/queries/queries_98k_k4096.json
+docker compose -f containerized_environment/docker-compose.async_vnodes.yml down --remove-orphans
+```
+Use `ARCH=async_clustered` for the clustered comparison point (standard is skipped here, same as in the sync hops sweep — its recall doesn't depend on clustering).
+
+#### Option B — Per-architecture, manually
 Ensure the cluster nodes for your target architecture are active, then run evaluations inside its distinct runner container:
 
 *   **Run Standard Chord DHT Benchmarks:**
@@ -286,12 +394,13 @@ Ensure the cluster nodes for your target architecture are active, then run evalu
     docker compose run semantic-runner
     ```
 *   **Generate Containerized Comparison Charts:**
-    Once you run evaluations for one or more architectures, run the plotter script inside any runner to overlay the curves:
+    `run_all_benchmarks_fullcorpus.sh` already regenerates the charts at the end of a run. To (re)plot from existing result JSONs without re-running the suite, invoke the matplotlib plotter in any async runner — it reads the `*_async_*` result files (semantic router vs. clustered DHT) and writes the figures back to the host:
     ```bash
-    cd containerized_environment/semantic_router
-    docker compose run --entrypoint "python -m src.benchmarks.containerized.plot" semantic-runner
+    cd containerized_environment/async_semantic_router
+    docker compose -f docker-compose.yml -f docker-compose.k5500.yml run --rm --no-deps \
+      --entrypoint python async-semantic-runner -m src.benchmarks.containerized.plot
     ```
-    _Outputs are automatically written back to your host machine in `data/benchmarks/results/containerized/` and `data/benchmarks/plots/containerized/`._
+    _Figures are written to `data/benchmarks/plots/containerized/`._
 
 ### Metrics Measured:
 - **Search Recall:** Accuracy compared to a monolithic exact-KNN baseline.
@@ -299,7 +408,7 @@ Ensure the cluster nodes for your target architecture are active, then run evalu
 - **End-to-End Latency:** Search latency scaling advantages under concurrent query workloads.
 - **Healing & Migration Speed:** Duration (in seconds) for rings to heal after node crashes and migrate primary keys on node joins.
 
-**Please view the README in [`data/benchmarks/README.md`](data/benchmarks/README.md) for a full, visual analysis of the local evaluation findings!**
+**Please view [`data/benchmarks/README.md`](data/benchmarks/README.md) for the full evaluation report — the head-to-head Semantic Router vs. Clustered DHT comparison across all seven experiments, each with its figure, numbers, and a who-wins verdict.**
 
 ---
 
@@ -311,24 +420,43 @@ The following plots represent the final "apples-to-apples" comparison of all thr
 Demonstrates how the **Semantic Router**'s hop count grows only by $O(1)$ per additional probed cluster as the search radius (`nprobe`) expands, while the **Clustered DHT** suffers linear hop growth due to randomized hash scatter.
 ![Scaling Metrics](data/benchmarks/plots/containerized/scaling_metrics_combined.png)
 
-### 2. Network Expansion (Dynamic Node Joins)
+### 2. Routing Efficiency at Scale — 100 Nodes, Full 98,104-Course Corpus (Headline Result)
+The scaling result above is confirmed at production scale: a **100-virtual-node ring**, a **K=4096 fine-grained clustering**, and the **entire Kaggle corpus** (no subsampling), queried against a held-out set of 50 fixed queries with exact-cosine ground truth.
+
+![Hops vs nprobe at 100 nodes](data/benchmarks/plots/containerized/hops_vs_nprobe.png)
+
+At every `nprobe` value tested (1 through 40), **recall@5 is byte-identical between the two architectures** — both probe the exact same set of semantic clusters, so this isolates routing cost as the only variable. The routing cost is not remotely comparable:
+
+| nprobe | Recall@5 (both architectures) | Semantic Router hops | Clustered DHT hops |
+|---|---|---|---|
+| 1  | 57.2% | 2.74 | 3.26 |
+| 8  | 74.4% | 2.88 | 22.42 |
+| 40 | 77.6% | **3.64** | **85.48** |
+
+At `nprobe=40`, the Semantic Router needs **23.5× fewer hops** than the Clustered DHT to retrieve the exact same result set — because semantically adjacent clusters are mapped to ring-adjacent nodes, so each additional probed cluster costs one $O(1)$ successor/predecessor hop instead of a fresh $O(\log N)$ Chord lookup. This gap **widens** with ring size and `nprobe`, since Clustered DHT's cost is $O(nprobe \cdot \log N)$ against Semantic Router's $O(\log N + nprobe)$.
+
+### 3. Network Expansion (Dynamic Node Joins)
 Demonstrates the impact of dynamically scaling the network from 5 nodes to 6 nodes.
 ![Node Join Metrics](data/benchmarks/plots/containerized/node_join_combined.png)
 
-### 3. Fault Tolerance (Node Crashes)
+### 4. Fault Tolerance (Node Crashes)
 Demonstrates the recall resiliency of the architectures when random nodes are forcibly killed.
 ![Fault Tolerance](data/benchmarks/plots/containerized/fault_tolerance_combined_recall.png)
 
-### 🏆 Conclusion: The Winner Architecture
+### 🏆 Conclusion: Which Architecture Wins?
 
-There is no single "silver bullet"; the optimal architecture depends entirely on the **Network Density** (the ratio of physical nodes to semantic clusters):
+There is no single "silver bullet" — but the winner is decided by the **metric and the failure model**, not by network density alone (an earlier density-based framing that the dense-ring disaster experiment refuted):
 
-1. **Dense Networks (Nodes > Clusters): The Semantic Router Wins.** 
-   When the physical ring is large enough that adjacent semantic clusters map to isolated physical nodes, the Semantic Router achieves the fault tolerance of the Clustered DHT while maintaining blazing fast $O(1)$ flat routing efficiency.
-2. **Sparse Networks (Nodes < Clusters): The Clustered DHT Wins.**
-   When the physical ring is small, the Semantic Router is forced to bundle adjacent clusters onto single machines, creating dangerous Correlated Failure Domains. The Clustered DHT artificially scatters data across the sparse ring to guarantee fault tolerance, trading latency for data survival.
+1. **Routing efficiency & scalability: the Semantic Router wins — decisively and *always*.**
+   Because adjacent semantic clusters map to adjacent ring positions, fanning out to `nprobe` clusters costs ~one lookup regardless of ring size: **~4 hops vs. the Clustered DHT's ~91 at 100 nodes, at identical recall**. Semantic **decouples recall from routing cost**; clustered chains them.
+2. **Normal operation, recall, single/random failures, and node join: a tie.**
+   Both place data identically (same recall), both mask a single node loss via replication (full recovery), and both conserve data across a 5→6 node join.
+3. **Correlated / hot-node failures: the Clustered DHT is more robust — at *any* density.**
+   SHA-1 scatter spreads a correlated loss thin; the Semantic Router's locality concentrates popular topics, so killing a hot node blacks out a whole topic community. This holds in **sparse** rings (13.2% vs. 33.3% post-disaster recall) **and** in **dense** rings (9.2 vs. 4.5 pp mean drop, 89 vs. 45 queries hit, 0% vs. 11.2% recovery at 100 nodes). Density *narrows* the gap but does not flip it.
 
-*(Note: This vulnerability is mathematically and empirically proven in the "Disaster Scenario" benchmark. Please see [`data/benchmarks/README.md`](data/benchmarks/README.md) for the full analytical proof and plotting).*
+**The bottom line:** topology-aware placement buys a ~22× routing-cost reduction *for free* in the common case (recall is unchanged), and its **only** price is correlated-failure resilience — a cost that is **failure-model-dependent** (negligible for random failures, real for adversarial hot-node failures).
+
+*(All of the above is quantified experiment-by-experiment, with figures, in the full evaluation report: [`data/benchmarks/README.md`](data/benchmarks/README.md).)*
 
 ### 🧠 The Dual-Purpose of `nprobe`
 In traditional Machine Learning vector databases, `nprobe` is purely an **accuracy parameter**. However, in this decentralized P2P architecture, `nprobe` serves a critical dual purpose:
@@ -341,9 +469,9 @@ In traditional Machine Learning vector databases, `nprobe` is purely an **accura
 
 With the core architectures, dynamic self-healing, replication data migration, and active replica load-balancing fully benchmarked, future work will focus on scaling the deployment to production-grade distributed environments:
 
-1. **Containerized Network Emulation (Real Latency & Bandwidth Constraints):**
-   - Moving from `localhost` loopback socket configurations to dedicated Docker/Kubernetes container deployments.
-   - Introducing real physical network propagation latency (e.g., 5ms to 50ms) across regions to evaluate the overhead of multi-hop Chord routing queries and background stabilization.
+1. **Real Network Latency & Multi-Machine Deployment:**
+   - Docker and Kubernetes container deployments are already implemented (see the "Kubernetes Deployment" section above and [`k8s/README.md`](k8s/README.md)), but both currently run on a single host, so all reported latency remains relative-only.
+   - Remaining work: deploying across physically distinct machines/regions to introduce real network propagation latency (e.g., 5ms to 50ms) and evaluate the overhead of multi-hop Chord routing queries and background stabilization under real network conditions.
 
 2. **Multi-Core Hardware Isolation (GIL Workload Optimization):**
    - Setting explicit CPU and memory resource constraints (limits/requests) per containerized node.
@@ -353,7 +481,8 @@ With the core architectures, dynamic self-healing, replication data migration, a
    - Utilizing tools like Chaos Mesh to inject packet drops, random packet delay (jitter), and split-brain network partitions to evaluate the robustness of the Chord ring stabilization protocols under adversarial network conditions.
 
 4. **Massive Scale-Out Evaluations:**
-   - Scaling deployments to 1,000+ nodes to test high-dimensional vector partitioning and confirm $O(\log N)$ network routing hops at a true enterprise scale.
+   - A 100-virtual-node ring (K=4096 centroids) over the full 98,104-course corpus has already confirmed the routing-efficiency result at this scale (23.5× fewer hops than Clustered DHT at identical recall).
+   - Remaining work: scaling to 1,000+ *physical* nodes to confirm the same $O(\log N + nprobe)$ routing-cost behavior beyond a single-host virtual-node ring, at a true enterprise scale.
 
 ---
 

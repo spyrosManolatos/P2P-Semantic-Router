@@ -1,0 +1,22 @@
+services:
+  standard-bootstrap:
+    environment:
+      - CONFIG_PATH=/app/containerized_environment/config.vnodes.yaml
+  standard-node-1:
+    environment:
+      - CONFIG_PATH=/app/containerized_environment/config.vnodes.yaml
+  standard-node-2:
+    environment:
+      - CONFIG_PATH=/app/containerized_environment/config.vnodes.yaml
+  standard-node-3:
+    environment:
+      - CONFIG_PATH=/app/containerized_environment/config.vnodes.yaml
+  standard-node-4:
+    environment:
+      - CONFIG_PATH=/app/containerized_environment/config.vnodes.yaml
+  standard-node-5:
+    environment:
+      - CONFIG_PATH=/app/containerized_environment/config.vnodes.yaml
+  standard-runner:
+    environment:
+      - CONFIG_PATH=/app/containerized_environment/config.vnodes.yaml

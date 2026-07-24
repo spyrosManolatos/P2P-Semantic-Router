@@ -23,5 +23,3 @@ storage:
   num_courses: 100
   load_threshold: 3
 
-kmeans:
-  clusters: 50

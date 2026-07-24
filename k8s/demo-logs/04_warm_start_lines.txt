@@ -1,0 +1,10 @@
+[dht-2.dht:5003] WARM START: loaded shard from persistent volume (21 courses in 1 clusters).
+[dht-2.dht:5008] WARM START: loaded shard from persistent volume (10 courses in 2 clusters).
+[dht-2.dht:5010] WARM START: loaded shard from persistent volume (5 courses in 1 clusters).
+[dht-2.dht:5011] WARM START: loaded shard from persistent volume (1 courses in 1 clusters).
+[dht-2.dht:5012] WARM START: loaded shard from persistent volume (2 courses in 1 clusters).
+[dht-2.dht:5014] WARM START: loaded shard from persistent volume (1 courses in 1 clusters).
+[dht-2.dht:5016] WARM START: loaded shard from persistent volume (1 courses in 1 clusters).
+[dht-2.dht:5017] WARM START: loaded shard from persistent volume (11 courses in 1 clusters).
+[dht-2.dht:5018] WARM START: loaded shard from persistent volume (54 courses in 3 clusters).
+[dht-2.dht:5019] WARM START: loaded shard from persistent volume (1 courses in 1 clusters).

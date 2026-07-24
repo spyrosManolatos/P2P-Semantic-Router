@@ -1,0 +1,65 @@
+# Async counterpart of docker-compose.vnodes.yml: 5 physical containers x
+# NUM_VNODES virtual nodes each, using the FastAPI/httpx transport
+# (async_app_vnodes.py) instead of xmlrpc. Distinct container names (av-*) so
+# this can coexist with the xmlrpc-based v-* vnode ring if both are ever run.
+#
+# Usage:
+#   ARCH=async_semantic NUM_VNODES=20 docker compose -f containerized_environment/docker-compose.async_vnodes.yml up -d --build
+#   docker compose -f containerized_environment/docker-compose.async_vnodes.yml run --rm runner -m src.benchmarks.containerized.evaluate ...
+#   docker compose -f containerized_environment/docker-compose.async_vnodes.yml down --remove-orphans
+
+x-vnode-common: &vnode-common
+  image: p2p-semantic-router:latest
+  build:
+    context: ..
+    dockerfile: containerized_environment/Dockerfile
+  entrypoint: ["python", "containerized_environment/async_app_vnodes.py"]
+  environment:
+    - CONFIG_PATH=/app/containerized_environment/config.vnodes.yaml
+  volumes:
+    - ../data:/app/data
+    - ../src:/app/src
+    - ./async_app_vnodes.py:/app/containerized_environment/async_app_vnodes.py
+    - ./config.vnodes.yaml:/app/containerized_environment/config.vnodes.yaml
+
+services:
+  av-bootstrap:
+    <<: *vnode-common
+    container_name: av-bootstrap
+    command: ["--arch", "${ARCH:-async_semantic}", "--ip", "av-bootstrap", "--port", "5000",
+              "--num_vnodes", "${NUM_VNODES:-5}"]
+
+  av-node-1:
+    <<: *vnode-common
+    container_name: av-node-1
+    depends_on: [av-bootstrap]
+    command: ["--arch", "${ARCH:-async_semantic}", "--ip", "av-node-1", "--port", "5000",
+              "--num_vnodes", "${NUM_VNODES:-5}", "--bootstrap", "av-bootstrap:5000"]
+
+  av-node-2:
+    <<: *vnode-common
+    container_name: av-node-2
+    depends_on: [av-bootstrap]
+    command: ["--arch", "${ARCH:-async_semantic}", "--ip", "av-node-2", "--port", "5000",
+              "--num_vnodes", "${NUM_VNODES:-5}", "--bootstrap", "av-bootstrap:5000"]
+
+  av-node-3:
+    <<: *vnode-common
+    container_name: av-node-3
+    depends_on: [av-bootstrap]
+    command: ["--arch", "${ARCH:-async_semantic}", "--ip", "av-node-3", "--port", "5000",
+              "--num_vnodes", "${NUM_VNODES:-5}", "--bootstrap", "av-bootstrap:5000"]
+
+  av-node-4:
+    <<: *vnode-common
+    container_name: av-node-4
+    depends_on: [av-bootstrap]
+    command: ["--arch", "${ARCH:-async_semantic}", "--ip", "av-node-4", "--port", "5000",
+              "--num_vnodes", "${NUM_VNODES:-5}", "--bootstrap", "av-bootstrap:5000"]
+
+  runner:
+    <<: *vnode-common
+    container_name: av-runner
+    profiles: [runner]
+    entrypoint: ["python"]
+    depends_on: [av-bootstrap, av-node-1, av-node-2, av-node-3, av-node-4]

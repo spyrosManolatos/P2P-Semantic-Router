@@ -1,0 +1,806 @@
+{
+    "dataset": "kaggle",
+    "dataset_size": 98104,
+    "ground_truth": [
+        {
+            "query": "Perform an Excellent Neurological Bedside Exam Health & Fitness Learn the basic neurological exam. Useful for all those in the Neuroscience or Medical field Objectives: How to perform an excellent neurological exam Discover the nuances of neurological testing Create a working knowledge of the basic neurological exam",
+            "course": {
+                "course_id": "2301582",
+                "course_title": "Perform an Excellent Neurological Bedside Exam",
+                "description": "Learn the basic neurological exam. Useful for all those in the Neuroscience or Medical field Objectives: How to perform an excellent neurological exam Discover the nuances of neurological testing Create a working knowledge of the basic neurological exam",
+                "category": "Health & Fitness"
+            },
+            "ground_truth_ids": [
+                "2301582",
+                "4886180",
+                "3165438",
+                "2764320",
+                "3566813"
+            ]
+        },
+        {
+            "query": "\u0627\u0644\u062a\u062c\u0627\u0631\u0629 \u0627\u0644\u0627\u0644\u0643\u062a\u0631\u0648\u0646\u064a\u0629 \u0639\u0628\u0631 \u0645\u0648\u0642\u0639 \u0627\u064a\u0628\u0627\u064a - E-commerce using ebay Business \u0627\u0644\u062a\u062c\u0627\u0631\u0629 \u0627\u0644\u0627\u0644\u0643\u062a\u0631\u0648\u0646\u064a\u0629 \u0639\u0628\u0631 \u0645\u0648\u0642\u0639 \u0627\u064a\u0628\u0627\u064a - E-commerce using ebay Objectives: \u0627\u0645\u062a\u0644\u0643 \u0639\u0642\u0644\u064a\u0629 \u0631\u0627\u0626\u062f \u0627\u0644\u0627\u0639\u0645\u0627\u0644 - The Mindset of entrepreneurs \u0627\u0644\u0641\u0631\u0642 \u0628\u064a\u0646 \u0627\u0644\u062a\u062c\u0627\u0631\u0629 \u0627\u0644\u0627\u0644\u0643\u062a\u0631\u0648\u0646\u064a\u0629 \u0648\u0627\u0644\u062a\u062c\u0627\u0631\u0629 \u0627\u0644\u062a\u0642\u0644\u064a\u062f\u064a\u0629 - The difference between e-commerce and traditional commerce \u0645\u0627 \u0647\u0648 \u0627\u0644\u0627\u064a\u0628\u0627\u064a \u0648\u0643\u064a\u0641\u064a\u0629 \u0641\u062a\u062d \u062d\u0633\u0627\u0628 \u062e\u0637\u0648\u0629 \u0628\u062e\u0637\u0648\u0629 - What is eBay and how to open an account step by step",
+            "course": {
+                "course_id": "6038252",
+                "course_title": "\u0627\u0644\u062a\u062c\u0627\u0631\u0629 \u0627\u0644\u0627\u0644\u0643\u062a\u0631\u0648\u0646\u064a\u0629 \u0639\u0628\u0631 \u0645\u0648\u0642\u0639 \u0627\u064a\u0628\u0627\u064a - E-commerce using ebay",
+                "description": "\u0627\u0644\u062a\u062c\u0627\u0631\u0629 \u0627\u0644\u0627\u0644\u0643\u062a\u0631\u0648\u0646\u064a\u0629 \u0639\u0628\u0631 \u0645\u0648\u0642\u0639 \u0627\u064a\u0628\u0627\u064a - E-commerce using ebay Objectives: \u0627\u0645\u062a\u0644\u0643 \u0639\u0642\u0644\u064a\u0629 \u0631\u0627\u0626\u062f \u0627\u0644\u0627\u0639\u0645\u0627\u0644 - The Mindset of entrepreneurs \u0627\u0644\u0641\u0631\u0642 \u0628\u064a\u0646 \u0627\u0644\u062a\u062c\u0627\u0631\u0629 \u0627\u0644\u0627\u0644\u0643\u062a\u0631\u0648\u0646\u064a\u0629 \u0648\u0627\u0644\u062a\u062c\u0627\u0631\u0629 \u0627\u0644\u062a\u0642\u0644\u064a\u062f\u064a\u0629 - The difference between e-commerce and traditional commerce \u0645\u0627 \u0647\u0648 \u0627\u0644\u0627\u064a\u0628\u0627\u064a \u0648\u0643\u064a\u0641\u064a\u0629 \u0641\u062a\u062d \u062d\u0633\u0627\u0628 \u062e\u0637\u0648\u0629 \u0628\u062e\u0637\u0648\u0629 - What is eBay and how to open an account step by step",
+                "category": "Business"
+            },
+            "ground_truth_ids": [
+                "6038252",
+                "1119812",
+                "1512972",
+                "933978",
+                "678530"
+            ]
+        },
+        {
+            "query": "Learn Advanced Level Ruby Programming Development Learn the 2021 Pro advanced Level Ruby Programming Objectives: Students will be able to learn the most advanced concepts and skills that are now part of advanced Ruby Programming",
+            "course": {
+                "course_id": "3732584",
+                "course_title": "Learn Advanced Level Ruby Programming",
+                "description": "Learn the 2021 Pro advanced Level Ruby Programming Objectives: Students will be able to learn the most advanced concepts and skills that are now part of advanced Ruby Programming",
+                "category": "Development"
+            },
+            "ground_truth_ids": [
+                "3732584",
+                "5531674",
+                "2567424",
+                "5181098",
+                "3599628"
+            ]
+        },
+        {
+            "query": "Fundamental of Power Electronics with MATLAB Simulink Teaching & Academics This course was made to cover the Fundamental of Power Electronics needed for a student to understand this subject. Objectives: The theory behind fundamental of Power Electronic Converters Design different types of Power Electronic Converters using MATLAB/SIMULINK Environment Understand how power semiconductor devices used in power converter",
+            "course": {
+                "course_id": "3507830",
+                "course_title": "Fundamental of Power Electronics with MATLAB Simulink",
+                "description": "This course was made to cover the Fundamental of Power Electronics needed for a student to understand this subject. Objectives: The theory behind fundamental of Power Electronic Converters Design different types of Power Electronic Converters using MATLAB/SIMULINK Environment Understand how power semiconductor devices used in power converter",
+                "category": "Teaching & Academics"
+            },
+            "ground_truth_ids": [
+                "3507830",
+                "3968076",
+                "2468568",
+                "2725888",
+                "2061435"
+            ]
+        },
+        {
+            "query": "Embedded Communication Protocols - Beginner's Masterclass IT & Software Learn Embedded Communication Protocols like UART, SPI, I2C, CAN, USB and ETHERNET in all aspects, Become Master into it. Objectives: you will learn basics of Communication protocol. you will learn what is serial and parallel communication with example. you will learn all necessary things about important communication protocols like SPI, UART, I2C, CAN, USB and ETHERNET.",
+            "course": {
+                "course_id": "4473124",
+                "course_title": "Embedded Communication Protocols - Beginner's Masterclass",
+                "description": "Learn Embedded Communication Protocols like UART, SPI, I2C, CAN, USB and ETHERNET in all aspects, Become Master into it. Objectives: you will learn basics of Communication protocol. you will learn what is serial and parallel communication with example. you will learn all necessary things about important communication protocols like SPI, UART, I2C, CAN, USB and ETHERNET.",
+                "category": "IT & Software"
+            },
+            "ground_truth_ids": [
+                "4473124",
+                "4802352",
+                "79802",
+                "2360692",
+                "5809898"
+            ]
+        },
+        {
+            "query": "Complete Introduction to Cyber Security-2021 IT & Software Learn Cyber Security core concepts such as hacking, viruses, Encryption, Trojan, Spyware, Bots & Botnets,& more Objectives: MITM Attack What is Botnet DDOS Attack",
+            "course": {
+                "course_id": "3369834",
+                "course_title": "Complete Introduction to Cyber Security-2021",
+                "description": "Learn Cyber Security core concepts such as hacking, viruses, Encryption, Trojan, Spyware, Bots & Botnets,& more Objectives: MITM Attack What is Botnet DDOS Attack",
+                "category": "IT & Software"
+            },
+            "ground_truth_ids": [
+                "3369834",
+                "3275944",
+                "3653548",
+                "2498676",
+                "384788"
+            ]
+        },
+        {
+            "query": "HTML Certification, Practice Test For Exams & Interviews IT & Software This course includes basic & and advanced questions about HTML, HTML5 that will help you in exams &  job interviews Objectives: HTML 5 HTML 5 Interview Questions HTML 5 Test Preparation",
+            "course": {
+                "course_id": "3604998",
+                "course_title": "HTML Certification, Practice Test For Exams & Interviews",
+                "description": "This course includes basic & and advanced questions about HTML, HTML5 that will help you in exams &  job interviews Objectives: HTML 5 HTML 5 Interview Questions HTML 5 Test Preparation",
+                "category": "IT & Software"
+            },
+            "ground_truth_ids": [
+                "3604998",
+                "5785846",
+                "3279118",
+                "5518614",
+                "929016"
+            ]
+        },
+        {
+            "query": "(PMI-PgMP) Mock Exams 2024 (590 Questions) Business Mastering the PMI Program Management Professional (PMI-PgMP) Exam: Mock Exams prep 2024 Objectives: Increased Confidence in Exam Readiness: Build confidence in exam readiness by successfully completing multiple full-length mock exams . Effective Time Management: Improve time management skills by practicing under simulated exam conditions with timed mock exams, ensuring the ability to complete Identification of Strengths and Weaknesses: Identify strengths and weaknesses in program management knowledge and skills through performance analytics",
+            "course": {
+                "course_id": "5589298",
+                "course_title": "(PMI-PgMP) Mock Exams 2024 (590 Questions)",
+                "description": "Mastering the PMI Program Management Professional (PMI-PgMP) Exam: Mock Exams prep 2024 Objectives: Increased Confidence in Exam Readiness: Build confidence in exam readiness by successfully completing multiple full-length mock exams . Effective Time Management: Improve time management skills by practicing under simulated exam conditions with timed mock exams, ensuring the ability to complete Identification of Strengths and Weaknesses: Identify strengths and weaknesses in program management knowledge and skills through performance analytics",
+                "category": "Business"
+            },
+            "ground_truth_ids": [
+                "5589298",
+                "5904060",
+                "5822296",
+                "774774",
+                "2105768"
+            ]
+        },
+        {
+            "query": "IELTS 7+ Band SPEAKING course by the best IELTS Expert Teaching & Academics A complete IELTS 7+ Band prep for Listening Reading Writing & Speaking for Academic & General Training (9 Band strategy) Objectives: Tips & Techniques to get 7+ Band in IELTS Speaking Get IELTS 7 and 5  Band responses differences Skills to boost your Speaking up-to 8+ Band",
+            "course": {
+                "course_id": "4909996",
+                "course_title": "IELTS 7+ Band SPEAKING course by the best IELTS Expert",
+                "description": "A complete IELTS 7+ Band prep for Listening Reading Writing & Speaking for Academic & General Training (9 Band strategy) Objectives: Tips & Techniques to get 7+ Band in IELTS Speaking Get IELTS 7 and 5  Band responses differences Skills to boost your Speaking up-to 8+ Band",
+                "category": "Teaching & Academics"
+            },
+            "ground_truth_ids": [
+                "4909996",
+                "4610832",
+                "4909990",
+                "2836124",
+                "1212416"
+            ]
+        },
+        {
+            "query": "Amazon No Content, Publish Profitable KDP Low Content Books Business Learn How to Generate Long-Term Passive Income from Amazon KDP (Kindle Direct Publishing). Objectives: Sell no/low content books on Amazon and earn your first income online The Best Strategies to Find High Need but Low Competition Niches for the Highest Sales Create your own Amazon KDP low content interiors",
+            "course": {
+                "course_id": "5765048",
+                "course_title": "Amazon No Content, Publish Profitable KDP Low Content Books",
+                "description": "Learn How to Generate Long-Term Passive Income from Amazon KDP (Kindle Direct Publishing). Objectives: Sell no/low content books on Amazon and earn your first income online The Best Strategies to Find High Need but Low Competition Niches for the Highest Sales Create your own Amazon KDP low content interiors",
+                "category": "Business"
+            },
+            "ground_truth_ids": [
+                "5765048",
+                "4258270",
+                "4940230",
+                "5282718",
+                "3151946"
+            ]
+        },
+        {
+            "query": "Premium ACT\u00ae Prep Course: Improve Your ACT Score Teaching & Academics A comprehensive, fully-animated course that will help you master the ACT Objectives: Learn the best techniques and tricks to getting an amazing ACT score Achieve your maximum potential ACT score - which means more admittance letters, scholarships, and choices Confidently take the ACT exam",
+            "course": {
+                "course_id": "615074",
+                "course_title": "Premium ACT\u00ae Prep Course: Improve Your ACT Score",
+                "description": "A comprehensive, fully-animated course that will help you master the ACT Objectives: Learn the best techniques and tricks to getting an amazing ACT score Achieve your maximum potential ACT score - which means more admittance letters, scholarships, and choices Confidently take the ACT exam",
+                "category": "Teaching & Academics"
+            },
+            "ground_truth_ids": [
+                "615074",
+                "685310",
+                "1313878",
+                "5039012",
+                "1306282"
+            ]
+        },
+        {
+            "query": "Complete PRESCHOOL Course Teaching & Academics Nursery and Kinder Garten course for Kid's Parent Objectives: English Maths EVS",
+            "course": {
+                "course_id": "3510006",
+                "course_title": "Complete PRESCHOOL Course",
+                "description": "Nursery and Kinder Garten course for Kid's Parent Objectives: English Maths EVS",
+                "category": "Teaching & Academics"
+            },
+            "ground_truth_ids": [
+                "3510006",
+                "5175756",
+                "4580952",
+                "2797900",
+                "3193534"
+            ]
+        },
+        {
+            "query": "Harmonize Your Moon: Compensation in Western Astrology Lifestyle how to harmonize negative aspects of the Moon in your Astrology Chart and compensate instead of surrendering to fate Objectives: what Moon represents in your Natal Chart the negative aspects of the Moon and how to harmonize them what is compensation in Astrology",
+            "course": {
+                "course_id": "6116159",
+                "course_title": "Harmonize Your Moon: Compensation in Western Astrology",
+                "description": "how to harmonize negative aspects of the Moon in your Astrology Chart and compensate instead of surrendering to fate Objectives: what Moon represents in your Natal Chart the negative aspects of the Moon and how to harmonize them what is compensation in Astrology",
+                "category": "Lifestyle"
+            },
+            "ground_truth_ids": [
+                "6116159",
+                "1780148",
+                "1701232",
+                "5265130",
+                "2666358"
+            ]
+        },
+        {
+            "query": "The Complete Public Speaking Course:  Become a Great Speaker Business You can quickly go from a competent speaker to a fantastic, memorable speaker who  communicates effectively in any forum Objectives: Create a great speech Learn how to practice on video Avoid data dumping and other common blunders",
+            "course": {
+                "course_id": "296403",
+                "course_title": "The Complete Public Speaking Course:  Become a Great Speaker",
+                "description": "You can quickly go from a competent speaker to a fantastic, memorable speaker who  communicates effectively in any forum Objectives: Create a great speech Learn how to practice on video Avoid data dumping and other common blunders",
+                "category": "Business"
+            },
+            "ground_truth_ids": [
+                "296403",
+                "363396",
+                "8075",
+                "363092",
+                "400832"
+            ]
+        },
+        {
+            "query": "Massage Therapy for Couples Health & Fitness Learn how to give a professional quality massage to your partner and friends! Objectives: How to give a professional quality massage to a partner or friends Various massage techniques: Swedish, Deep Tissue, Stretching and Fascial Release Basic Anatomy and Massage Technique with Practical Videos",
+            "course": {
+                "course_id": "3167980",
+                "course_title": "Massage Therapy for Couples",
+                "description": "Learn how to give a professional quality massage to your partner and friends! Objectives: How to give a professional quality massage to a partner or friends Various massage techniques: Swedish, Deep Tissue, Stretching and Fascial Release Basic Anatomy and Massage Technique with Practical Videos",
+                "category": "Health & Fitness"
+            },
+            "ground_truth_ids": [
+                "3167980",
+                "5362804",
+                "4464118",
+                "5204768",
+                "5204780"
+            ]
+        },
+        {
+            "query": "3D Printing - Everything You Need To Know Design 3D modelling training using Solidworks for 3D printing to start innovating even if you don't have a 3D printer. Objectives: Learn how to create 3D models and then print them. Go ahead for creating your own innovative model. Learn to create awesome 3D model and the thought process behind creating Models",
+            "course": {
+                "course_id": "4514718",
+                "course_title": "3D Printing - Everything You Need To Know",
+                "description": "3D modelling training using Solidworks for 3D printing to start innovating even if you don't have a 3D printer. Objectives: Learn how to create 3D models and then print them. Go ahead for creating your own innovative model. Learn to create awesome 3D model and the thought process behind creating Models",
+                "category": "Design"
+            },
+            "ground_truth_ids": [
+                "4514718",
+                "3245812",
+                "4756452",
+                "4346776",
+                "1632534"
+            ]
+        },
+        {
+            "query": "React - Beginner to Advanced (+ Redux & Ecommerce App) Development Learn React from the beginning. Build interesting projects. Gain confidence to start applying for jobs... Objectives: Fundamentals of ReactJS React hooks and practical applications Build cool projects using ReactJS",
+            "course": {
+                "course_id": "4299759",
+                "course_title": "React - Beginner to Advanced (+ Redux & Ecommerce App)",
+                "description": "Learn React from the beginning. Build interesting projects. Gain confidence to start applying for jobs... Objectives: Fundamentals of ReactJS React hooks and practical applications Build cool projects using ReactJS",
+                "category": "Development"
+            },
+            "ground_truth_ids": [
+                "4299759",
+                "3469622",
+                "3658756",
+                "2321154",
+                "2365628"
+            ]
+        },
+        {
+            "query": "Practical Google BigQuery for those who already know SQL Development Learn how to become BigQuery power user and kick-off you career as Data Scientist, Data Engineer, Analyst or Developer Objectives: How BigQuery works and how to use this knowledge to write fast and cost-effective queries Creating tables with all advanced properties like partitioning, clustering and retention policy Properly choose method of moving data into and out of BigQuery",
+            "course": {
+                "course_id": "2898416",
+                "course_title": "Practical Google BigQuery for those who already know SQL",
+                "description": "Learn how to become BigQuery power user and kick-off you career as Data Scientist, Data Engineer, Analyst or Developer Objectives: How BigQuery works and how to use this knowledge to write fast and cost-effective queries Creating tables with all advanced properties like partitioning, clustering and retention policy Properly choose method of moving data into and out of BigQuery",
+                "category": "Development"
+            },
+            "ground_truth_ids": [
+                "2898416",
+                "3904604",
+                "5787046",
+                "4011242",
+                "3535922"
+            ]
+        },
+        {
+            "query": "Practical QGIS For Spatial Data Analysis: Beginner to Expert Business Master Geographic Information Systems (GIS) For Spatial Data Analysis With QGIS: Go from Basic To Expert Level Objectives: You will have a greater clarity of basic spatial data concepts and data types Carry out practical spatial data analysis tasks in freely available software-QGIS Learn about the kind of questions that are answered through Geographic Information System (GIS)",
+            "course": {
+                "course_id": "2983104",
+                "course_title": "Practical QGIS For Spatial Data Analysis: Beginner to Expert",
+                "description": "Master Geographic Information Systems (GIS) For Spatial Data Analysis With QGIS: Go from Basic To Expert Level Objectives: You will have a greater clarity of basic spatial data concepts and data types Carry out practical spatial data analysis tasks in freely available software-QGIS Learn about the kind of questions that are answered through Geographic Information System (GIS)",
+                "category": "Business"
+            },
+            "ground_truth_ids": [
+                "2983104",
+                "762768",
+                "4254130",
+                "1996656",
+                "3466676"
+            ]
+        },
+        {
+            "query": "A Beginners Guide to Exadata Patching for Oracle DBA's IT & Software Oracle DBA's interested to explore the World of Exadata Upgrades & Patching. Objectives: Evolution & Journey of Exadata (2008-2018) Discussion around Exadata Stack Important Metalink Notes",
+            "course": {
+                "course_id": "1786976",
+                "course_title": "A Beginners Guide to Exadata Patching for Oracle DBA's",
+                "description": "Oracle DBA's interested to explore the World of Exadata Upgrades & Patching. Objectives: Evolution & Journey of Exadata (2008-2018) Discussion around Exadata Stack Important Metalink Notes",
+                "category": "IT & Software"
+            },
+            "ground_truth_ids": [
+                "1786976",
+                "2527206",
+                "3390116",
+                "5095480",
+                "3891136"
+            ]
+        },
+        {
+            "query": "Structural Engineering Abaqus Tutorials IT & Software The most comprehensive course with 13.5 hours of real life structural examples under various loading conditions Objectives: Various damage model such: Concrete damage plasticity (CDP), Johnson-cook, Johnson-Holmquist, Hasin damage model, ductile and shear damage model Applying various loading condition (Tensile, compression, bending, high and low impacts, repetitive impact and cyclic loading) Modelling concrete and steel column and beams",
+            "course": {
+                "course_id": "3216135",
+                "course_title": "Structural Engineering Abaqus Tutorials",
+                "description": "The most comprehensive course with 13.5 hours of real life structural examples under various loading conditions Objectives: Various damage model such: Concrete damage plasticity (CDP), Johnson-cook, Johnson-Holmquist, Hasin damage model, ductile and shear damage model Applying various loading condition (Tensile, compression, bending, high and low impacts, repetitive impact and cyclic loading) Modelling concrete and steel column and beams",
+                "category": "IT & Software"
+            },
+            "ground_truth_ids": [
+                "3216135",
+                "3926218",
+                "930024",
+                "2289889",
+                "4034108"
+            ]
+        },
+        {
+            "query": "Attracting Aligned Clients Marketing For Energy Healers, Holistic Practitioners, Spiritual Coaches and Complementary and Alternative Medicine Practitioners Objectives: Have a clear understanding of how to define a specialty to attract fully aligned clients for energy healers and holistic practitioners.. How to create content in less time that resonates with your ideal audience and converts into scheduled bookings.. You\u2019ll gain actionable insights, practical tools, and exercises to build a sustainable and impactful client base.",
+            "course": {
+                "course_id": "6241735",
+                "course_title": "Attracting Aligned Clients",
+                "description": "For Energy Healers, Holistic Practitioners, Spiritual Coaches and Complementary and Alternative Medicine Practitioners Objectives: Have a clear understanding of how to define a specialty to attract fully aligned clients for energy healers and holistic practitioners.. How to create content in less time that resonates with your ideal audience and converts into scheduled bookings.. You\u2019ll gain actionable insights, practical tools, and exercises to build a sustainable and impactful client base.",
+                "category": "Marketing"
+            },
+            "ground_truth_ids": [
+                "6241735",
+                "6018888",
+                "5573230",
+                "5077480",
+                "5661457"
+            ]
+        },
+        {
+            "query": "Street Jitsu - Self Defense for the Street Health & Fitness Learn to defend yourself against fights on the street Objectives: You will learn the most useful strikes for self defense You will learn how to handle a fight on the ground and get back to standing You will learn how to talk your way out of a fight",
+            "course": {
+                "course_id": "1395840",
+                "course_title": "Street Jitsu - Self Defense for the Street",
+                "description": "Learn to defend yourself against fights on the street Objectives: You will learn the most useful strikes for self defense You will learn how to handle a fight on the ground and get back to standing You will learn how to talk your way out of a fight",
+                "category": "Health & Fitness"
+            },
+            "ground_truth_ids": [
+                "1395840",
+                "375070",
+                "5573030",
+                "4829876",
+                "3935956"
+            ]
+        },
+        {
+            "query": "Learn Spring & Spring Boot \u2013 10x Productive Java Development Development Spring Boot is highly in-demand and ultimate way to develop Java applications. Start developing your apps right now! Objectives: Ways to get up and running with Spring Boot Understand how Spring and Spring Boot works Work with Spring Profiles and Spring Configuration",
+            "course": {
+                "course_id": "1110672",
+                "course_title": "Learn Spring & Spring Boot \u2013 10x Productive Java Development",
+                "description": "Spring Boot is highly in-demand and ultimate way to develop Java applications. Start developing your apps right now! Objectives: Ways to get up and running with Spring Boot Understand how Spring and Spring Boot works Work with Spring Profiles and Spring Configuration",
+                "category": "Development"
+            },
+            "ground_truth_ids": [
+                "1110672",
+                "5957646",
+                "3245452",
+                "647428",
+                "2493132"
+            ]
+        },
+        {
+            "query": "Draw a digital portrait using the Paintology drawing app Lifestyle Learn important drawing techniques with this course Objectives: Draw a digital portrait with the Paintology drawing app Digital drawing made easy with the free Paintology app Learn skills and techniques to help with your overall drawing skills",
+            "course": {
+                "course_id": "3523244",
+                "course_title": "Draw a digital portrait using the Paintology drawing app",
+                "description": "Learn important drawing techniques with this course Objectives: Draw a digital portrait with the Paintology drawing app Digital drawing made easy with the free Paintology app Learn skills and techniques to help with your overall drawing skills",
+                "category": "Lifestyle"
+            },
+            "ground_truth_ids": [
+                "3523244",
+                "3503102",
+                "3497640",
+                "3494228",
+                "3473142"
+            ]
+        },
+        {
+            "query": "CBDC Pilot Tests in Japan, Korea, Saudi Arabia, UAE and Euro Finance & Accounting Know more about the hottest topic in tech and payments with FinTech Mentor at Rise by Barclays: DR. Oriol Caudevilla Objectives: Understand the diverse range of CBDC applications in different parts of the world Understand the technical architecture of CBDCs Digital Currency",
+            "course": {
+                "course_id": "4349572",
+                "course_title": "CBDC Pilot Tests in Japan, Korea, Saudi Arabia, UAE and Euro",
+                "description": "Know more about the hottest topic in tech and payments with FinTech Mentor at Rise by Barclays: DR. Oriol Caudevilla Objectives: Understand the diverse range of CBDC applications in different parts of the world Understand the technical architecture of CBDCs Digital Currency",
+                "category": "Finance & Accounting"
+            },
+            "ground_truth_ids": [
+                "4349572",
+                "1951046",
+                "455452",
+                "5587686",
+                "4349556"
+            ]
+        },
+        {
+            "query": "Algebra I: Straight To The Point Teaching & Academics Over 200 Worked Examples + Practice Questions (With Answers): Boost Your Confidence in Algebra I Objectives: By the end of the course, you will be able to tackle a wide variety of Algebra I questions and problems with confidence In this course, you will learn several of the skills required to succeed in Algebra I",
+            "course": {
+                "course_id": "141176",
+                "course_title": "Algebra I: Straight To The Point",
+                "description": "Over 200 Worked Examples + Practice Questions (With Answers): Boost Your Confidence in Algebra I Objectives: By the end of the course, you will be able to tackle a wide variety of Algebra I questions and problems with confidence In this course, you will learn several of the skills required to succeed in Algebra I",
+                "category": "Teaching & Academics"
+            },
+            "ground_truth_ids": [
+                "141176",
+                "1357646",
+                "106294",
+                "3475524",
+                "484382"
+            ]
+        },
+        {
+            "query": "Basic Carnatic Music - Level 1 Music Carnatic vocal lessons for beginners, kids and those who are interested in learning classical music Objectives: At the end of this course, students will be able to understand the basic technical terms used in Carnatic music This course helps in improving the melody and pitch with control on beats Students will be enriched with complete practical knowledge in Carnatic music",
+            "course": {
+                "course_id": "719586",
+                "course_title": "Basic Carnatic Music - Level 1",
+                "description": "Carnatic vocal lessons for beginners, kids and those who are interested in learning classical music Objectives: At the end of this course, students will be able to understand the basic technical terms used in Carnatic music This course helps in improving the melody and pitch with control on beats Students will be enriched with complete practical knowledge in Carnatic music",
+                "category": "Music"
+            },
+            "ground_truth_ids": [
+                "719586",
+                "1314010",
+                "1445378",
+                "2412426",
+                "1916238"
+            ]
+        },
+        {
+            "query": "A to Z Design of Solar Water Pumping System Teaching & Academics Get A to Z Knowledge of Solar Water Pump Installation and Design from Basics to Advanced with Prof. Kiran Beldar Objectives: Application of Solar Water Pump Use of Solar Energy to Generate Electricity Types of PV Cell and Solar Panel",
+            "course": {
+                "course_id": "3513720",
+                "course_title": "A to Z Design of Solar Water Pumping System",
+                "description": "Get A to Z Knowledge of Solar Water Pump Installation and Design from Basics to Advanced with Prof. Kiran Beldar Objectives: Application of Solar Water Pump Use of Solar Energy to Generate Electricity Types of PV Cell and Solar Panel",
+                "category": "Teaching & Academics"
+            },
+            "ground_truth_ids": [
+                "3513720",
+                "3523542",
+                "6053505",
+                "4119064",
+                "3428100"
+            ]
+        },
+        {
+            "query": "Beginner Sewing Course Lifestyle Learn how to sew a gorgeous pair of PJs! Objectives: By the end of the course you will be able to sew a pair of PJ sleepwear Basic sewing machine skills How to read a pattern",
+            "course": {
+                "course_id": "213848",
+                "course_title": "Beginner Sewing Course",
+                "description": "Learn how to sew a gorgeous pair of PJs! Objectives: By the end of the course you will be able to sew a pair of PJ sleepwear Basic sewing machine skills How to read a pattern",
+                "category": "Lifestyle"
+            },
+            "ground_truth_ids": [
+                "213848",
+                "4409702",
+                "3577143",
+                "2636750",
+                "1379348"
+            ]
+        },
+        {
+            "query": "Build Responsive Web Designs With No Code Using Macaw Design Learn how to easily turn your design ideas into real useable HTML and CSS code without writing a single line Objectives: Build real Web sites with no code Fully understand the Macaw tools and interface Necessary skills to build real-world websites: professional, beautiful and truly responsive websites",
+            "course": {
+                "course_id": "711406",
+                "course_title": "Build Responsive Web Designs With No Code Using Macaw",
+                "description": "Learn how to easily turn your design ideas into real useable HTML and CSS code without writing a single line Objectives: Build real Web sites with no code Fully understand the Macaw tools and interface Necessary skills to build real-world websites: professional, beautiful and truly responsive websites",
+                "category": "Design"
+            },
+            "ground_truth_ids": [
+                "711406",
+                "874960",
+                "1399352",
+                "3520740",
+                "3304778"
+            ]
+        },
+        {
+            "query": "Data Warehouse Development Process IT & Software Specific aspects of Data Warehouse Development Process Objectives: Understand various stages in Data Warehouse development process Various processes like Waterfall model, V model and Agile methods Specific aspects of Data Warehouse development process",
+            "course": {
+                "course_id": "1090766",
+                "course_title": "Data Warehouse Development Process",
+                "description": "Specific aspects of Data Warehouse Development Process Objectives: Understand various stages in Data Warehouse development process Various processes like Waterfall model, V model and Agile methods Specific aspects of Data Warehouse development process",
+                "category": "IT & Software"
+            },
+            "ground_truth_ids": [
+                "1090766",
+                "1364702",
+                "3902836",
+                "4011242",
+                "4161242"
+            ]
+        },
+        {
+            "query": "Professional UHT Sterilizer Design for the Dairy Industry Design Advanced Techniques in UHT Sterilizer Design for Optimal Dairy Processing Efficiency Objectives: Master UHT Sterilization Principles Design and Engineering Best Practices Optimization and Efficiency",
+            "course": {
+                "course_id": "6157849",
+                "course_title": "Professional UHT Sterilizer Design for the Dairy Industry",
+                "description": "Advanced Techniques in UHT Sterilizer Design for Optimal Dairy Processing Efficiency Objectives: Master UHT Sterilization Principles Design and Engineering Best Practices Optimization and Efficiency",
+                "category": "Design"
+            },
+            "ground_truth_ids": [
+                "6157849",
+                "6157905",
+                "3294896",
+                "3045614",
+                "5275676"
+            ]
+        },
+        {
+            "query": "Cosmic Healing ~ Pranayama : Cosmic Energy Breath Healing Health & Fitness Ancient Yogic Energy breathing to develop health, happiness and inner richness. A complete breathing course. Objectives: Ancient Indian Yogic breathing techniques to stay healthy and disease free. Use the breath as a tool to heal the internal organs of the body Subtle exercises to keep the senses healthy and sharp",
+            "course": {
+                "course_id": "3205811",
+                "course_title": "Cosmic Healing ~ Pranayama : Cosmic Energy Breath Healing",
+                "description": "Ancient Yogic Energy breathing to develop health, happiness and inner richness. A complete breathing course. Objectives: Ancient Indian Yogic breathing techniques to stay healthy and disease free. Use the breath as a tool to heal the internal organs of the body Subtle exercises to keep the senses healthy and sharp",
+                "category": "Health & Fitness"
+            },
+            "ground_truth_ids": [
+                "3205811",
+                "3295912",
+                "4609290",
+                "5338358",
+                "4507238"
+            ]
+        },
+        {
+            "query": "Mastering SQL Server RDS on AWS IT & Software Learn Microsoft SQL Server Administration using AWS RDS from a Certified Administrator Objectives: How to set up and manage a SQL Server instance on Amazon RDS How to migrate databases from on-premises to RDS How to create and manage backups and restore points",
+            "course": {
+                "course_id": "5043086",
+                "course_title": "Mastering SQL Server RDS on AWS",
+                "description": "Learn Microsoft SQL Server Administration using AWS RDS from a Certified Administrator Objectives: How to set up and manage a SQL Server instance on Amazon RDS How to migrate databases from on-premises to RDS How to create and manage backups and restore points",
+                "category": "IT & Software"
+            },
+            "ground_truth_ids": [
+                "5043086",
+                "1009832",
+                "2224512",
+                "2286399",
+                "4537832"
+            ]
+        },
+        {
+            "query": "Mockito: Next-Level Java Unit Testing Development Learn the latest Mockito 5 for Java unit testing in just 2 hours and take your developer career to the next level! Objectives: Enrich Java JUnit tests with mocks Learn the latest Mockito 5 version Run unit tests with mocks in Eclipse",
+            "course": {
+                "course_id": "3571071",
+                "course_title": "Mockito: Next-Level Java Unit Testing",
+                "description": "Learn the latest Mockito 5 for Java unit testing in just 2 hours and take your developer career to the next level! Objectives: Enrich Java JUnit tests with mocks Learn the latest Mockito 5 version Run unit tests with mocks in Eclipse",
+                "category": "Development"
+            },
+            "ground_truth_ids": [
+                "3571071",
+                "5272768",
+                "2669808",
+                "911256",
+                "3794620"
+            ]
+        },
+        {
+            "query": "Accounting 101: Learn Basic Accounting Concepts With Ease Finance & Accounting Learn Basic Accounting 101 Concepts, How To Account for Debits and Credits, Financial Reporting, Revenue & Expenses Objectives: Learn From A Top Rated Instructor Who Has Been Teaching On Udemy Since 2013 and Taught Over 100,000 Students! Fundamentals of Accounting Debits and Credits",
+            "course": {
+                "course_id": "1606448",
+                "course_title": "Accounting 101: Learn Basic Accounting Concepts With Ease",
+                "description": "Learn Basic Accounting 101 Concepts, How To Account for Debits and Credits, Financial Reporting, Revenue & Expenses Objectives: Learn From A Top Rated Instructor Who Has Been Teaching On Udemy Since 2013 and Taught Over 100,000 Students! Fundamentals of Accounting Debits and Credits",
+                "category": "Finance & Accounting"
+            },
+            "ground_truth_ids": [
+                "1606448",
+                "1676156",
+                "32908",
+                "1679220",
+                "500206"
+            ]
+        },
+        {
+            "query": "Systems Ecology An Introduction Teaching & Academics Understanding the workings of ecosystems Objectives: The aim of this course is to give you a solid grasp of the core concepts within the domain of systems ecology By the end of the course you should be familiar with and be able to apply the most important models from systems ecology",
+            "course": {
+                "course_id": "758322",
+                "course_title": "Systems Ecology An Introduction",
+                "description": "Understanding the workings of ecosystems Objectives: The aim of this course is to give you a solid grasp of the core concepts within the domain of systems ecology By the end of the course you should be familiar with and be able to apply the most important models from systems ecology",
+                "category": "Teaching & Academics"
+            },
+            "ground_truth_ids": [
+                "758322",
+                "486224",
+                "768540",
+                "444094",
+                "745844"
+            ]
+        },
+        {
+            "query": "Mastering Adobe Acrobat XI Made Easy Training Tutorial Design Learn how to use Adobe Acrobat with this comprehensive course. Objectives: Getting Acquainted with Acrobat Creating PDFs Editing PDFs",
+            "course": {
+                "course_id": "258530",
+                "course_title": "Mastering Adobe Acrobat XI Made Easy Training Tutorial",
+                "description": "Learn how to use Adobe Acrobat with this comprehensive course. Objectives: Getting Acquainted with Acrobat Creating PDFs Editing PDFs",
+                "category": "Design"
+            },
+            "ground_truth_ids": [
+                "258530",
+                "852826",
+                "5140160",
+                "1611532",
+                "4001258"
+            ]
+        },
+        {
+            "query": "How to Deal with Difficult People Personal Development How in the World Do You Get Along with Someone Who - No Matter What You Do - Is Darn Near Impossible to Get Along with? Objectives: Apply simple solutions for dealing with people who are difficult to get along with Take control over relationships with difficult people.   Recognize six different types of difficult people",
+            "course": {
+                "course_id": "602850",
+                "course_title": "How to Deal with Difficult People",
+                "description": "How in the World Do You Get Along with Someone Who - No Matter What You Do - Is Darn Near Impossible to Get Along with? Objectives: Apply simple solutions for dealing with people who are difficult to get along with Take control over relationships with difficult people.   Recognize six different types of difficult people",
+                "category": "Personal Development"
+            },
+            "ground_truth_ids": [
+                "602850",
+                "3127632",
+                "4123638",
+                "4123644",
+                "1287958"
+            ]
+        },
+        {
+            "query": "Data Structures in C++ IT & Software Mastering Data Structures in C++: Build Robust Foundations for Efficient Coding! Objectives: Demonstrate knowledge of the concepts of data structures, logical structure and storage structure of data and their basic operation. Demonstrate ability to solve practical problems using suitable data structures and methods. Master the design and analysis methods of searching and sorting algorithm.",
+            "course": {
+                "course_id": "5347308",
+                "course_title": "Data Structures in C++",
+                "description": "Mastering Data Structures in C++: Build Robust Foundations for Efficient Coding! Objectives: Demonstrate knowledge of the concepts of data structures, logical structure and storage structure of data and their basic operation. Demonstrate ability to solve practical problems using suitable data structures and methods. Master the design and analysis methods of searching and sorting algorithm.",
+                "category": "IT & Software"
+            },
+            "ground_truth_ids": [
+                "5347308",
+                "2616140",
+                "2121018",
+                "4254130",
+                "4322598"
+            ]
+        },
+        {
+            "query": "FOREX TRADING STRATEGY - The Three Stage Confirmation Part 1 Finance & Accounting A-Z of Forex Trading with Complete Elliott Wave Analysis on EURUSD, GBPUSD, USDJPY, AUDUSD, USDCAD | LIVE MT4 Trades Objectives: The harsh truth of present trading industry and why retail traders continue to fail 90% of the times in Forex markets. Learn how the difference in the trading mindset of a retail  trader and a professional trader decides the winners and losers in investment industry. How manipulation by market makers or professional traders using 90/90/90 phenomenon is aimed at capital destruction of retail traders at all times.",
+            "course": {
+                "course_id": "3137154",
+                "course_title": "FOREX TRADING STRATEGY - The Three Stage Confirmation Part 1",
+                "description": "A-Z of Forex Trading with Complete Elliott Wave Analysis on EURUSD, GBPUSD, USDJPY, AUDUSD, USDCAD | LIVE MT4 Trades Objectives: The harsh truth of present trading industry and why retail traders continue to fail 90% of the times in Forex markets. Learn how the difference in the trading mindset of a retail  trader and a professional trader decides the winners and losers in investment industry. How manipulation by market makers or professional traders using 90/90/90 phenomenon is aimed at capital destruction of retail traders at all times.",
+                "category": "Finance & Accounting"
+            },
+            "ground_truth_ids": [
+                "3137154",
+                "5404846",
+                "4906636",
+                "3460194",
+                "1313976"
+            ]
+        },
+        {
+            "query": "UML Fundamentals IT & Software A Practical Course That Teaches UML  Fundamentals Objectives: Learn UML from a leading expert",
+            "course": {
+                "course_id": "779070",
+                "course_title": "UML Fundamentals",
+                "description": "A Practical Course That Teaches UML  Fundamentals Objectives: Learn UML from a leading expert",
+                "category": "IT & Software"
+            },
+            "ground_truth_ids": [
+                "779070",
+                "4521088",
+                "2342126",
+                "3754350",
+                "1767394"
+            ]
+        },
+        {
+            "query": "Engineering Manager - The Basics Personal Development Become the Engineering Manager you wished to have when you were a Junior Objectives: Define the roles and expectations from an Software Engineering Manager. Define set of rules which will help newly born Manager to succeed. Suggest a set of examples to simplify Engineering Manager life.",
+            "course": {
+                "course_id": "5214116",
+                "course_title": "Engineering Manager - The Basics",
+                "description": "Become the Engineering Manager you wished to have when you were a Junior Objectives: Define the roles and expectations from an Software Engineering Manager. Define set of rules which will help newly born Manager to succeed. Suggest a set of examples to simplify Engineering Manager life.",
+                "category": "Personal Development"
+            },
+            "ground_truth_ids": [
+                "5214116",
+                "3895724",
+                "4015818",
+                "5198396",
+                "5408124"
+            ]
+        },
+        {
+            "query": "Killer Sales Technique, Learn Conversational Selling Business This is your course to become A top sales person in your company or for yourself. Objectives: Sell your idea, prodect or service with confidence and have fun doing it. Learn what \"Conversational Selling \" really means and why using it will  close more deals with half the effort of traditional selling methods Understand how to change your mindset from \"preasure to close \" to \"Enjoy the conversation\"",
+            "course": {
+                "course_id": "835248",
+                "course_title": "Killer Sales Technique, Learn Conversational Selling",
+                "description": "This is your course to become A top sales person in your company or for yourself. Objectives: Sell your idea, prodect or service with confidence and have fun doing it. Learn what \"Conversational Selling \" really means and why using it will  close more deals with half the effort of traditional selling methods Understand how to change your mindset from \"preasure to close \" to \"Enjoy the conversation\"",
+                "category": "Business"
+            },
+            "ground_truth_ids": [
+                "835248",
+                "3884962",
+                "1731090",
+                "5941496",
+                "127438"
+            ]
+        },
+        {
+            "query": "UPDATED CIPS Level 4 Diploma - Commercial Negotiation (L4M5) Business The comprehensive practice questions with in-depth answers and insights to master your CIPS exam (The new syllabus 2024) Objectives: Learning Outcome 1: Understand key approaches in the negotiation of commercial agreements with external organisation Learning Outcome 2: Know how to prepare for negotiations with external organisations Learning Outcome 3: Understand how commercial negotiations should be undertaken",
+            "course": {
+                "course_id": "2827516",
+                "course_title": "UPDATED CIPS Level 4 Diploma - Commercial Negotiation (L4M5)",
+                "description": "The comprehensive practice questions with in-depth answers and insights to master your CIPS exam (The new syllabus 2024) Objectives: Learning Outcome 1: Understand key approaches in the negotiation of commercial agreements with external organisation Learning Outcome 2: Know how to prepare for negotiations with external organisations Learning Outcome 3: Understand how commercial negotiations should be undertaken",
+                "category": "Business"
+            },
+            "ground_truth_ids": [
+                "2827516",
+                "2786922",
+                "2755782",
+                "3140502",
+                "2630330"
+            ]
+        },
+        {
+            "query": "LIFE DIRECTION - following true north Personal Development Learn to navigate the big picture and become the author of your experience. Objectives: Big picture planning Life mapping Learn how to prioritise at the macro scale",
+            "course": {
+                "course_id": "5098400",
+                "course_title": "LIFE DIRECTION - following true north",
+                "description": "Learn to navigate the big picture and become the author of your experience. Objectives: Big picture planning Life mapping Learn how to prioritise at the macro scale",
+                "category": "Personal Development"
+            },
+            "ground_truth_ids": [
+                "5098400",
+                "5367290",
+                "5323972",
+                "615274",
+                "6219531"
+            ]
+        },
+        {
+            "query": "Body Language and Leadership Business Master the power of body language and non-verbal communication to enhance your leadership skills. Objectives: Learn to analyze body language and non-verbal communication. Master your gestures, expressions and posture to influence others. Use body language to communicate trust, authority and empathy.",
+            "course": {
+                "course_id": "5959920",
+                "course_title": "Body Language and Leadership",
+                "description": "Master the power of body language and non-verbal communication to enhance your leadership skills. Objectives: Learn to analyze body language and non-verbal communication. Master your gestures, expressions and posture to influence others. Use body language to communicate trust, authority and empathy.",
+                "category": "Business"
+            },
+            "ground_truth_ids": [
+                "5959920",
+                "5255076",
+                "1820862",
+                "6063825",
+                "3509568"
+            ]
+        },
+        {
+            "query": "Acting Essentials for Film & TV Personal Development Role Prep, Self-Tapes, Casting Resources & More Objectives: How to build a solid foundation for your acting career Learn to create industry standard and elevated self-tapes Develop your technique for prepping roles",
+            "course": {
+                "course_id": "4992304",
+                "course_title": "Acting Essentials for Film & TV",
+                "description": "Role Prep, Self-Tapes, Casting Resources & More Objectives: How to build a solid foundation for your acting career Learn to create industry standard and elevated self-tapes Develop your technique for prepping roles",
+                "category": "Personal Development"
+            },
+            "ground_truth_ids": [
+                "4992304",
+                "3352240",
+                "2478694",
+                "930704",
+                "1195556"
+            ]
+        },
+        {
+            "query": "How to Overcome Shyness and Gain Self-Confidence? Personal Development Improve Self-Esteem: Overcoming Timidness, Social Awkwardness, Embarrassment. Improving Social and Communication Skills Objectives: Overcoming shyness Developing social skills Building self-esteem",
+            "course": {
+                "course_id": "4166424",
+                "course_title": "How to Overcome Shyness and Gain Self-Confidence?",
+                "description": "Improve Self-Esteem: Overcoming Timidness, Social Awkwardness, Embarrassment. Improving Social and Communication Skills Objectives: Overcoming shyness Developing social skills Building self-esteem",
+                "category": "Personal Development"
+            },
+            "ground_truth_ids": [
+                "4166424",
+                "2666562",
+                "4380212",
+                "3500336",
+                "4170028"
+            ]
+        }
+    ]
+}

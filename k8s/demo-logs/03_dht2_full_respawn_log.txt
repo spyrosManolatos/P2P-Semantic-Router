@@ -1,0 +1,140 @@
+============================================================
+Starting SEMANTIC DHT container 'dht-2.dht' with 20 virtual node(s) on ports 5000..5019
+Joining ring via bootstrap: dht-0.dht:5000
+============================================================
+  [vnode 0] dht-2.dht:5000  ->  bootstrap=dht-0.dht:5000
+[dht-2.dht:5000] Loaded artifact: k=80, d=1000
+Node started on dht-2.dht:5000 (ID: 1276230973023334199444910404735626486592922116233)
+[dht-2.dht:5000] Requesting data migration from successor dht-0.dht:5009...
+[dht-2.dht:5000] Data migration complete. Received 1 clusters.
+  [vnode 1] dht-2.dht:5001  ->  bootstrap=dht-0.dht:5000
+[dht-2.dht:5001] Loaded artifact: k=80, d=1000
+Node started on dht-2.dht:5001 (ID: 588387450960716519540913590416817852931686034179)
+[dht-2.dht:5001] Requesting data migration from successor dht-2.dht:5015...
+[dht-2.dht:5001] Warning: Data migration failed: [Errno 111] Connection refused
+[dht-2.dht:5001] Successor dht-2.dht:5015 failed. Removing from list.
+  [vnode 2] dht-2.dht:5002  ->  bootstrap=dht-0.dht:5000
+[dht-2.dht:5002] Loaded artifact: k=80, d=1000
+Node started on dht-2.dht:5002 (ID: 139895122128407340265834666839176690918263849601)
+[dht-2.dht:5002] Requesting data migration from successor dht-0.dht:5009...
+[dht-2.dht:5002] Data migration complete. Received 1 clusters.
+  [vnode 3] dht-2.dht:5003  ->  bootstrap=dht-0.dht:5000
+[dht-2.dht:5003] WARM START: loaded shard from persistent volume (21 courses in 1 clusters).
+[dht-2.dht:5003] Loaded artifact: k=80, d=1000
+Node started on dht-2.dht:5003 (ID: 489808912134680170464019524751254869474638258919)
+[dht-2.dht:5003] Requesting data migration from successor dht-3.dht:5003...
+[dht-2.dht:5003] Data migration complete. Received 1 clusters.
+  [vnode 4] dht-2.dht:5004  ->  bootstrap=dht-0.dht:5000
+[dht-2.dht:5004] Loaded artifact: k=80, d=1000
+Node started on dht-2.dht:5004 (ID: 1182436872283024141749906334981854599158987189380)
+[dht-2.dht:5004] Requesting data migration from successor dht-0.dht:5009...
+[dht-2.dht:5004] Data migration complete. Received 1 clusters.
+  [vnode 5] dht-2.dht:5005  ->  bootstrap=dht-0.dht:5000
+[dht-2.dht:5005] Loaded artifact: k=80, d=1000
+Node started on dht-2.dht:5005 (ID: 614505679154837231561241728472792219077269375810)
+[dht-2.dht:5005] Requesting data migration from successor dht-4.dht:5008...
+[dht-2.dht:5005] Data migration complete. Received 0 clusters.
+  [vnode 6] dht-2.dht:5006  ->  bootstrap=dht-0.dht:5000
+[dht-2.dht:5006] Loaded artifact: k=80, d=1000
+Node started on dht-2.dht:5006 (ID: 1282081997158287699979497176246322731709660864206)
+[dht-2.dht:5006] Requesting data migration from successor dht-4.dht:5008...
+[dht-2.dht:5006] Data migration complete. Received 0 clusters.
+  [vnode 7] dht-2.dht:5007  ->  bootstrap=dht-0.dht:5000
+[dht-2.dht:5007] Loaded artifact: k=80, d=1000
+Node started on dht-2.dht:5007 (ID: 258765875989488831348777146828376031545877090923)
+[dht-2.dht:5007] Requesting data migration from successor dht-4.dht:5008...
+[dht-2.dht:5007] Data migration complete. Received 0 clusters.
+[dht-2.dht:5005] Successor dht-2.dht:5013 failed. Removing from list.
+  [vnode 8] dht-2.dht:5008  ->  bootstrap=dht-0.dht:5000
+[dht-2.dht:5008] WARM START: loaded shard from persistent volume (10 courses in 2 clusters).
+[dht-2.dht:5008] Loaded artifact: k=80, d=1000
+Node started on dht-2.dht:5008 (ID: 530765831534018627827496776556171066686608180788)
+[dht-2.dht:5008] Requesting data migration from successor dht-4.dht:5008...
+[dht-2.dht:5008] Data migration complete. Received 0 clusters.
+[dht-2.dht:5006] Successor dht-2.dht:5013 failed. Removing from list.
+[dht-2.dht:5005] Successor dht-2.dht:5013 failed. Removing from list.
+  [vnode 9] dht-2.dht:5009  ->  bootstrap=dht-0.dht:5000
+[dht-2.dht:5009] Loaded artifact: k=80, d=1000
+Node started on dht-2.dht:5009 (ID: 721034429688004113114273223697228897708846936540)
+[dht-2.dht:5009] Requesting data migration from successor dht-4.dht:5008...
+[dht-2.dht:5009] Data migration complete. Received 0 clusters.
+[dht-2.dht:5006] Successor dht-2.dht:5013 failed. Removing from list.
+[dht-2.dht:5007] Successor dht-2.dht:5013 failed. Removing from list.
+[dht-2.dht:5005] Successor dht-2.dht:5013 failed. Removing from list.
+  [vnode 10] dht-2.dht:5010  ->  bootstrap=dht-0.dht:5000
+[dht-2.dht:5010] WARM START: loaded shard from persistent volume (5 courses in 1 clusters).
+[dht-2.dht:5010] Loaded artifact: k=80, d=1000
+Node started on dht-2.dht:5010 (ID: 75160527611162435297320776828891806609588965269)
+[dht-2.dht:5010] Requesting data migration from successor dht-4.dht:5008...
+[dht-2.dht:5010] Data migration complete. Received 2 clusters.
+[dht-2.dht:5008] Failed to sync replicas to dht-2.dht:5013: [Errno 111] Connection refused
+[dht-2.dht:5006] Successor dht-2.dht:5013 failed. Removing from list.
+[dht-2.dht:5007] Successor dht-2.dht:5013 failed. Removing from list.
+[dht-2.dht:5005] Successor dht-2.dht:5013 failed. Removing from list.
+  [vnode 11] dht-2.dht:5011  ->  bootstrap=dht-0.dht:5000
+[dht-2.dht:5011] WARM START: loaded shard from persistent volume (1 courses in 1 clusters).
+[dht-2.dht:5011] Loaded artifact: k=80, d=1000
+Node started on dht-2.dht:5011 (ID: 1158530145185039493461740022365153135902888846533)
+[dht-2.dht:5011] Requesting data migration from successor dht-4.dht:5008...
+[dht-2.dht:5011] Data migration complete. Received 2 clusters.
+[dht-2.dht:5008] Successor dht-2.dht:5013 failed. Removing from list.
+[dht-2.dht:5009] Successor dht-2.dht:5013 failed. Removing from list.
+[dht-2.dht:5006] Successor dht-2.dht:5013 failed. Removing from list.
+[dht-2.dht:5007] Successor dht-2.dht:5013 failed. Removing from list.
+[dht-2.dht:5005] Successor dht-2.dht:5013 failed. Removing from list.
+[dht-2.dht:5008] Failed to sync replicas to dht-2.dht:5013: [Errno 111] Connection refused
+  [vnode 12] dht-2.dht:5012  ->  bootstrap=dht-0.dht:5000
+[dht-2.dht:5012] WARM START: loaded shard from persistent volume (2 courses in 1 clusters).
+[dht-2.dht:5012] Loaded artifact: k=80, d=1000
+Node started on dht-2.dht:5012 (ID: 310763457606053015851085974541177541462276436174)
+[dht-2.dht:5012] Requesting data migration from successor dht-4.dht:5008...
+[dht-2.dht:5012] Data migration complete. Received 0 clusters.
+[dht-2.dht:5008] Successor dht-2.dht:5013 failed. Removing from list.
+[dht-2.dht:5010] Failed to sync replicas to dht-2.dht:5013: [Errno 111] Connection refused
+[dht-2.dht:5009] Successor dht-2.dht:5013 failed. Removing from list.
+[dht-2.dht:5006] Successor dht-2.dht:5013 failed. Removing from list.
+[dht-2.dht:5007] Successor dht-2.dht:5013 failed. Removing from list.
+[dht-2.dht:5005] Successor dht-2.dht:5013 failed. Removing from list.
+[dht-2.dht:5008] Failed to sync replicas to dht-2.dht:5013: [Errno 111] Connection refused
+[dht-2.dht:5010] Successor dht-2.dht:5013 failed. Removing from list.
+  [vnode 13] dht-2.dht:5013  ->  bootstrap=dht-0.dht:5000
+[dht-2.dht:5013] Loaded artifact: k=80, d=1000
+Node started on dht-2.dht:5013 (ID: 115794072034431870237220602161576497814520138133)
+[dht-2.dht:5013] Requesting data migration from successor dht-4.dht:5008...
+[dht-2.dht:5013] Data migration complete. Received 5 clusters.
+  [vnode 14] dht-2.dht:5014  ->  bootstrap=dht-0.dht:5000
+[dht-2.dht:5014] WARM START: loaded shard from persistent volume (1 courses in 1 clusters).
+[dht-2.dht:5014] Loaded artifact: k=80, d=1000
+Node started on dht-2.dht:5014 (ID: 1158490421683029922914689254820286827500588124411)
+[dht-2.dht:5014] Requesting data migration from successor dht-4.dht:5008...
+[dht-2.dht:5014] Data migration complete. Received 4 clusters.
+  [vnode 15] dht-2.dht:5015  ->  bootstrap=dht-0.dht:5000
+[dht-2.dht:5015] Loaded artifact: k=80, d=1000
+Node started on dht-2.dht:5015 (ID: 603576949643863435998103054976348561743132757604)
+[dht-2.dht:5015] Requesting data migration from successor dht-4.dht:5008...
+[dht-2.dht:5015] Data migration complete. Received 3 clusters.
+  [vnode 16] dht-2.dht:5016  ->  bootstrap=dht-0.dht:5000
+[dht-2.dht:5016] WARM START: loaded shard from persistent volume (1 courses in 1 clusters).
+[dht-2.dht:5016] Loaded artifact: k=80, d=1000
+Node started on dht-2.dht:5016 (ID: 1041932029432936838215606537198516926310618127262)
+[dht-2.dht:5016] Requesting data migration from successor dht-4.dht:5008...
+[dht-2.dht:5016] Data migration complete. Received 3 clusters.
+  [vnode 17] dht-2.dht:5017  ->  bootstrap=dht-0.dht:5000
+[dht-2.dht:5017] WARM START: loaded shard from persistent volume (11 courses in 1 clusters).
+[dht-2.dht:5017] Loaded artifact: k=80, d=1000
+Node started on dht-2.dht:5017 (ID: 258336610592371470625590041064233746632496620896)
+[dht-2.dht:5017] Requesting data migration from successor dht-4.dht:5008...
+[dht-2.dht:5017] Data migration complete. Received 0 clusters.
+  [vnode 18] dht-2.dht:5018  ->  bootstrap=dht-0.dht:5000
+[dht-2.dht:5018] WARM START: loaded shard from persistent volume (54 courses in 3 clusters).
+[dht-2.dht:5018] Loaded artifact: k=80, d=1000
+Node started on dht-2.dht:5018 (ID: 1449735835407217654699964586391706493312296163020)
+[dht-2.dht:5018] Requesting data migration from successor dht-4.dht:5008...
+[dht-2.dht:5018] Data migration complete. Received 5 clusters.
+  [vnode 19] dht-2.dht:5019  ->  bootstrap=dht-0.dht:5000
+[dht-2.dht:5019] WARM START: loaded shard from persistent volume (1 courses in 1 clusters).
+[dht-2.dht:5019] Loaded artifact: k=80, d=1000
+Node started on dht-2.dht:5019 (ID: 1334064398732370427660958558861305912528357323319)
+[dht-2.dht:5019] Requesting data migration from successor dht-4.dht:5008...
+[dht-2.dht:5019] Data migration complete. Received 5 clusters.
+Container running 20 virtual node(s). Press Ctrl+C to terminate.

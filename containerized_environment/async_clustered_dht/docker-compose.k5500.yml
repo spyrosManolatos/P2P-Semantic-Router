@@ -1,0 +1,22 @@
+services:
+  async-clustered-bootstrap:
+    environment:
+      - CONFIG_PATH=/app/containerized_environment/config.vnodes.yaml
+  async-clustered-node-1:
+    environment:
+      - CONFIG_PATH=/app/containerized_environment/config.vnodes.yaml
+  async-clustered-node-2:
+    environment:
+      - CONFIG_PATH=/app/containerized_environment/config.vnodes.yaml
+  async-clustered-node-3:
+    environment:
+      - CONFIG_PATH=/app/containerized_environment/config.vnodes.yaml
+  async-clustered-node-4:
+    environment:
+      - CONFIG_PATH=/app/containerized_environment/config.vnodes.yaml
+  async-clustered-node-5:
+    environment:
+      - CONFIG_PATH=/app/containerized_environment/config.vnodes.yaml
+  async-clustered-runner:
+    environment:
+      - CONFIG_PATH=/app/containerized_environment/config.vnodes.yaml

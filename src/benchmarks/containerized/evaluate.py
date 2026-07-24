@@ -23,7 +23,25 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from benchmarks.metrics import compute_recall, timer_decorator
 from core.config_loader import load_config
+from core.json_rpc_client import JSONRPCProxy
 from architectures.monolithic_linear.linear_search import MonolithicSearcher
+
+
+def rpc_client(address: str):
+    """Returns an xmlrpc.client.ServerProxy for the xmlrpc-based architectures,
+    or a JSONRPCProxy (talking to the FastAPI/httpx node) for the async_* ones --
+    selected by the "a" (async container hostname prefix: "async-"/"av-") so
+    existing call sites for the other architectures stay untouched."""
+    host = address.split(":")[0]
+    if host.startswith("async-") or host.startswith("av-"):
+        return JSONRPCProxy(address)
+    return xmlrpc.client.ServerProxy(f"http://{address}", allow_none=True)
+
+
+def base_arch(arch: str) -> str:
+    """Strips the async_ prefix so behavior conditionals (nprobe use, standard-vs-
+    clustered-vs-semantic branching) don't need to be duplicated per transport."""
+    return arch[len("async_"):] if arch.startswith("async_") else arch
 
 @timer_decorator
 def run_monolithic(searcher, query_text):
@@ -38,7 +56,7 @@ def run_dht_query(node_rpc, course_json, nprobe=None):
 
 def inject_data_simple(node_address, courses, arch_name):
     print(f"Injecting {len(courses)} courses into {arch_name} cluster via {node_address}...")
-    client = xmlrpc.client.ServerProxy(f"http://{node_address}", allow_none=True)
+    client = rpc_client(node_address)
     for i, c in enumerate(courses):
         try:
             client.put_course(json.dumps(c))
@@ -50,7 +68,7 @@ def inject_data_simple(node_address, courses, arch_name):
 
 # --- CONCURRENCY work for load balancing benchmark ---
 def send_concurrency_query(address, course_json, nprobe):
-    client = xmlrpc.client.ServerProxy(f"http://{address}", allow_none=True)
+    client = rpc_client(address)
     start = time.perf_counter()  # monotonic clock: never runs backwards
     try:
         client.get_similar_courses(course_json, nprobe)
@@ -94,6 +112,30 @@ def get_node_addresses(arch):
             "clustered-node-3:5000",
             "clustered-node-4:5000"
         ]
+    elif arch == "async_standard":
+        return [
+            "async-standard-bootstrap:5000",
+            "async-standard-node-1:5000",
+            "async-standard-node-2:5000",
+            "async-standard-node-3:5000",
+            "async-standard-node-4:5000"
+        ]
+    elif arch == "async_clustered":
+        return [
+            "async-clustered-bootstrap:5000",
+            "async-clustered-node-1:5000",
+            "async-clustered-node-2:5000",
+            "async-clustered-node-3:5000",
+            "async-clustered-node-4:5000"
+        ]
+    elif arch == "async_semantic":
+        return [
+            "async-bootstrap-node:5000",
+            "async-node-1:5000",
+            "async-node-2:5000",
+            "async-node-3:5000",
+            "async-node-4:5000"
+        ]
     else: # semantic
         return [
             "bootstrap-node:5000",
@@ -103,14 +145,22 @@ def get_node_addresses(arch):
             "node-4:5000"
         ]
 
+def arch_label_for(arch: str) -> str:
+    base = base_arch(arch)
+    label = ("Standard Chord DHT" if base == "standard"
+             else "Clustered Chord DHT" if base == "clustered"
+             else "Semantic Router Chord DHT")
+    return f"Async {label} (FastAPI/httpx)" if arch.startswith("async_") else f"{label} (XML-RPC)"
+
+
 def run_scaling(args, subset_courses, ground_truth):
-    arch_label = "Standard Chord DHT" if args.arch == "standard" else "Clustered Chord DHT" if args.arch == "clustered" else "Semantic Router Chord DHT"
+    arch_label = arch_label_for(args.arch)
     print(f"\n=== Running {arch_label} Scaling & Recall Benchmark ===")
     
     node_addresses = get_node_addresses(args.arch)
     
     # Inject data into cluster
-    inject_data_simple(node_addresses[0], subset_courses, args.arch)
+    bulk_inject(args, node_addresses, subset_courses)
     
     # Wait for replication to settle
     print("Waiting 15s for full ring stabilization and finger table propagation...")
@@ -130,8 +180,13 @@ def run_scaling(args, subset_courses, ground_truth):
     print(f"Monolithic: Mean Latency = {sum(benchmark_results['monolithic'])/len(benchmark_results['monolithic']):.2f}ms")
     
     # 2. DHT benchmark
-    use_nprobe = (args.arch in ["clustered", "semantic"])
-    nprobe_values = [1, 2, 3, 4, 5] if use_nprobe else [1]
+    use_nprobe = (base_arch(args.arch) in ["clustered", "semantic"])
+    if use_nprobe:
+        HashNode = dummy_node_class(args.arch)
+        k = HashNode("127.0.0.1", 5000).k
+        nprobe_values = [n for n in [1, 2, 3, 5, 8, 12, 20, 40, 80] if n <= max(1, k)]
+    else:
+        nprobe_values = [1]
     
     for np in nprobe_values:
         np_key = f"nprobe_{np}" if use_nprobe else "standard"
@@ -143,7 +198,7 @@ def run_scaling(args, subset_courses, ground_truth):
         
         print(f"Evaluating {args.arch} with nprobe={np if use_nprobe else 'None'}...")
         # Use a fixed gateway node to eliminate random routing variance
-        client = xmlrpc.client.ServerProxy(f"http://{node_addresses[0]}", allow_none=True)
+        client = rpc_client(node_addresses[0])
         
         for gt in ground_truth:
             c_json = json.dumps(gt["course"])
@@ -175,7 +230,7 @@ def run_characterization(args, subset_courses, ground_truth):
     print(f"\n=== Running {args.arch} Ring Characterization ===")
     node_addresses = get_node_addresses(args.arch)
 
-    inject_data_simple(node_addresses[0], subset_courses, args.arch)
+    bulk_inject(args, node_addresses, subset_courses)
     print("Waiting 15s for full ring stabilization and finger table propagation...")
     time.sleep(15)
 
@@ -183,7 +238,7 @@ def run_characterization(args, subset_courses, ground_truth):
     per_node_primary = {}   # node address -> primary course count
     for addr in node_addresses:
         try:
-            info = xmlrpc.client.ServerProxy(f"http://{addr}", allow_none=True).get_info()
+            info = rpc_client(addr).get_info()
         except Exception as e:
             print(f"  Could not reach {addr}: {e}")
             continue
@@ -218,7 +273,7 @@ def run_characterization(args, subset_courses, ground_truth):
 
 
 def run_fault_tolerance(args, subset_courses, ground_truth):
-    arch_label = "Standard Chord DHT" if args.arch == "standard" else "Clustered Chord DHT" if args.arch == "clustered" else "Semantic Router Chord DHT"
+    arch_label = arch_label_for(args.arch)
     print(f"\n=== Running {arch_label} Fault Tolerance Benchmark ===")
     
     node_addresses = get_node_addresses(args.arch)
@@ -226,12 +281,12 @@ def run_fault_tolerance(args, subset_courses, ground_truth):
 
     # Inject data (each experiment runs on its own fresh ring, so it must
     # populate the ring itself rather than rely on a previous experiment).
-    inject_data_simple(node_addresses[0], subset_courses, args.arch)
+    bulk_inject(args, node_addresses, subset_courses)
     print("Waiting 15s for full ring stabilization and finger table propagation...")
     time.sleep(15)
 
     # Measure baseline latency and recall
-    client = xmlrpc.client.ServerProxy(f"http://{node_addresses[0]}", allow_none=True)
+    client = rpc_client(node_addresses[0])
     baseline_latencies = []
     baseline_recalls = []
     baseline_hops = []
@@ -239,7 +294,7 @@ def run_fault_tolerance(args, subset_courses, ground_truth):
     for gt in ground_truth:
         c_json = json.dumps(gt["course"])
         try:
-            (res_tuple, hops), latency = run_dht_query(client, c_json, args.nprobe if args.arch != "standard" else None)
+            (res_tuple, hops), latency = run_dht_query(client, c_json, args.nprobe if base_arch(args.arch) != "standard" else None)
             retrieved_ids = [json.loads(r)["course_id"] for r in res_tuple]
             recall = compute_recall(gt["ground_truth_ids"], retrieved_ids)
             baseline_recalls.append(recall)
@@ -266,7 +321,7 @@ def run_fault_tolerance(args, subset_courses, ground_truth):
     # Kill the second node gracefully via RPC stop
     failed_node_addr = node_addresses[1]
     print(f"Sending shutdown RPC to {failed_node_addr}...")
-    kill_client = xmlrpc.client.ServerProxy(f"http://{failed_node_addr}", allow_none=True)
+    kill_client = rpc_client(failed_node_addr)
     try:
         kill_client.stop()
     except Exception:
@@ -281,7 +336,7 @@ def run_fault_tolerance(args, subset_courses, ground_truth):
     for attempt in range(25):
         time.sleep(1)
         try:
-            test_client = xmlrpc.client.ServerProxy(f"http://{surviving_nodes[0]}", allow_none=True)
+            test_client = rpc_client(surviving_nodes[0])
             info = test_client.get_info()
             if info["successor"] != failed_node_addr:
                 healed = True
@@ -292,7 +347,7 @@ def run_fault_tolerance(args, subset_courses, ground_truth):
     heal_duration = time.time() - start_heal
     print(f"Successor pointer repaired in {heal_duration:.2f} seconds.")
 
-    active_client = xmlrpc.client.ServerProxy(f"http://{surviving_nodes[0]}", allow_none=True)
+    active_client = rpc_client(surviving_nodes[0])
 
     def measure_state():
         """Runs the full query set against the surviving ring; returns mean recall/latency/hops."""
@@ -300,7 +355,7 @@ def run_fault_tolerance(args, subset_courses, ground_truth):
         for gt in ground_truth:
             c_json = json.dumps(gt["course"])
             try:
-                (res_tuple, hops), latency = run_dht_query(active_client, c_json, args.nprobe if args.arch != "standard" else None)
+                (res_tuple, hops), latency = run_dht_query(active_client, c_json, args.nprobe if base_arch(args.arch) != "standard" else None)
                 retrieved_ids = [json.loads(r)["course_id"] for r in res_tuple]
                 recalls.append(compute_recall(gt["ground_truth_ids"], retrieved_ids))
                 latencies.append(latency)
@@ -339,31 +394,43 @@ def run_fault_tolerance(args, subset_courses, ground_truth):
     fault_results["after_failure_healed"] = healed
     # Backwards-compatible alias: existing plots read "after_failure" (use transient).
     fault_results["after_failure"] = {**transient}
-    fault_results["nprobe"] = args.nprobe if args.arch != "standard" else 1
+    fault_results["nprobe"] = args.nprobe if base_arch(args.arch) != "standard" else 1
 
     out_path = os.path.join(project_root(), "data", "benchmarks", "results", "containerized", f"fault_tolerance_results_{args.arch}.json")
     with open(out_path, "w") as f:
         json.dump(fault_results, f, indent=4)
     print(f"Fault tolerance results saved to {out_path}")
 
+def node5_host(arch: str) -> str:
+    """Hostname of the dedicated 6th node container, idle until run_node_join joins it."""
+    base = base_arch(arch)
+    prefix = "async-" if arch.startswith("async_") else ""
+    if base == "standard":
+        return f"{prefix}standard-node-5" if prefix else "standard-node-5"
+    elif base == "clustered":
+        return f"{prefix}clustered-node-5" if prefix else "clustered-node-5"
+    else:
+        return f"{prefix}node-5" if prefix else "node-5"
+
+
 def run_node_join(args, subset_courses, ground_truth):
-    arch_label = "Standard Chord DHT" if args.arch == "standard" else "Clustered Chord DHT" if args.arch == "clustered" else "Semantic Router Chord DHT"
+    arch_label = arch_label_for(args.arch)
     print(f"\n=== Running {arch_label} Node Join Benchmark ===")
-    
+
     node_addresses = get_node_addresses(args.arch)
-    
+
     # 1. Inject data
-    inject_data_simple(node_addresses[0], subset_courses, args.arch)
+    bulk_inject(args, node_addresses, subset_courses)
     print("Waiting 15s for full ring stabilization and finger table propagation...")
     time.sleep(15)
-    
+
     # Target the dedicated 6th node container running idle in the docker network
-    target_host = "standard-node-5" if args.arch == "standard" else "clustered-node-5" if args.arch == "clustered" else "node-5"
+    target_host = node5_host(args.arch)
     target_addr = f"{target_host}:5000"
     
     print(f"Connecting to idle container {target_host}...")
-    new_node = xmlrpc.client.ServerProxy(f"http://{target_addr}", allow_none=True)
-    existing_node = xmlrpc.client.ServerProxy(f"http://{node_addresses[0]}", allow_none=True)
+    new_node = rpc_client(target_addr)
+    existing_node = rpc_client(node_addresses[0])
     
     # --- QUERY BEFORE JOIN ---
     print("Executing queries on the original 5-node ring...")
@@ -373,7 +440,7 @@ def run_node_join(args, subset_courses, ground_truth):
     for gt in ground_truth:
         c_json = json.dumps(gt["course"])
         try:
-            (res_tuple, hops), latency = run_dht_query(existing_node, c_json, args.nprobe if args.arch != "standard" else None)
+            (res_tuple, hops), latency = run_dht_query(existing_node, c_json, args.nprobe if base_arch(args.arch) != "standard" else None)
             retrieved_ids = [json.loads(r)["course_id"] for r in res_tuple]
             recall = compute_recall(gt["ground_truth_ids"], retrieved_ids)
             pre_recalls.append(recall)
@@ -416,7 +483,7 @@ def run_node_join(args, subset_courses, ground_truth):
     for gt in ground_truth:
         c_json = json.dumps(gt["course"])
         try:
-            (res_tuple, hops), latency = run_dht_query(new_node, c_json, args.nprobe if args.arch != "standard" else None)
+            (res_tuple, hops), latency = run_dht_query(new_node, c_json, args.nprobe if base_arch(args.arch) != "standard" else None)
             retrieved_ids = [json.loads(r)["course_id"] for r in res_tuple]
             recall = compute_recall(gt["ground_truth_ids"], retrieved_ids)
             post_recalls.append(recall)
@@ -430,7 +497,7 @@ def run_node_join(args, subset_courses, ground_truth):
     mean_post_hops = sum(post_hops) / len(post_hops) if post_hops else 0
 
     join_results = {
-        "nprobe": args.nprobe if args.arch != "standard" else 1,
+        "nprobe": args.nprobe if base_arch(args.arch) != "standard" else 1,
         "original_5_nodes": {
             "recall": mean_pre_recall,
             "hops": mean_pre_hops,
@@ -458,13 +525,11 @@ def run_node_join(args, subset_courses, ground_truth):
     print(f"Node join results saved to {out_path}")
 
 def run_load_balancing(args, subset_courses, ground_truth):
-    arch_label = "Standard Chord DHT" if args.arch == "standard" else "Clustered Chord DHT" if args.arch == "clustered" else "Semantic Router Chord DHT"
+    arch_label = arch_label_for(args.arch)
     print(f"\n=== Running {arch_label} Concurrency Benchmark ===")
     
     node_addresses = get_node_addresses(args.arch)
     query_node_addr = node_addresses[0]
-
-    client = xmlrpc.client.ServerProxy(f"http://{query_node_addr}", allow_none=True)
 
     concurrency_workloads = [1, 2, 4, 8, 16]
     load_results = {
@@ -474,15 +539,17 @@ def run_load_balancing(args, subset_courses, ground_truth):
     }
 
     # Active replica delegation is a Semantic Router feature; the baselines have
-    # no equivalent, so this experiment is meaningful only for the semantic arch.
-    if args.arch != "semantic":
+    # no equivalent, so this experiment is meaningful only for the semantic arch
+    # (and its async_semantic variant, which shares the same delegation logic
+    # over a different RPC transport).
+    if args.arch not in ("semantic", "async_semantic"):
         print(f"Skipping load-balancing benchmark for '{args.arch}': "
               f"no active replica delegation in this architecture.")
         return
 
     # Inject data (fresh ring per experiment): without data the hotspot node has
     # nothing to serve and we would only measure empty-query overhead.
-    inject_data_simple(node_addresses[0], subset_courses, args.arch)
+    bulk_inject(args, node_addresses, subset_courses)
     print("Waiting 15s for full ring stabilization and finger table propagation...")
     time.sleep(15)
 
@@ -491,11 +558,16 @@ def run_load_balancing(args, subset_courses, ground_truth):
     hotspot = random.choice(subset_courses)
     print(f"Hotspot course: '{hotspot.get('course_title', '?')[:60]}'")
 
+    # Set on EVERY node, not just the entry point: bulk_inject just disabled
+    # delegation ring-wide, and whichever node actually owns the hotspot
+    # cluster (not necessarily node_addresses[0]) is the one whose threshold
+    # governs the delegation decision.
     print("Testing CONCURRENT queries WITH active load balancing (threshold=3)...")
-    try:
-        client.set_load_threshold(3)
-    except Exception:
-        pass
+    for addr in node_addresses:
+        try:
+            rpc_client(addr).set_load_threshold(3)
+        except Exception:
+            pass
     for batch_size in concurrency_workloads:
         avg_latency = run_concurrent_batch(query_node_addr, batch_size, subset_courses,
                                            args.nprobe, hotspot_course=hotspot)
@@ -503,10 +575,11 @@ def run_load_balancing(args, subset_courses, ground_truth):
         time.sleep(1)
 
     print("Testing CONCURRENT queries WITHOUT active load balancing (threshold=999)...")
-    try:
-        client.set_load_threshold(999)  # effectively never delegates
-    except Exception:
-        pass
+    for addr in node_addresses:
+        try:
+            rpc_client(addr).set_load_threshold(999)  # effectively never delegates
+        except Exception:
+            pass
     for batch_size in concurrency_workloads:
         avg_latency = run_concurrent_batch(query_node_addr, batch_size, subset_courses,
                                            args.nprobe, hotspot_course=hotspot)
@@ -522,7 +595,7 @@ def project_root():
     return os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 def queries_file_path():
-    return os.path.join(project_root(), "data", "benchmarks", "queries.json")
+    return os.path.join(project_root(), "data", "benchmarks", "queries", "queries_500.json")
 
 
 def generate_queries(args):
@@ -584,30 +657,45 @@ def load_ground_truth(args, searcher):
         return ground_truth
 
 
+def dummy_node_class(arch: str):
+    """Imports the (unstarted) node class matching `arch`, used purely for its
+    local vectorization/hashing math (_vectorize_and_find_centroids, get_cluster_hash,
+    get_hash) -- no network, no server started."""
+    base = base_arch(arch)
+    is_async = arch.startswith("async_")
+    if base == "clustered":
+        if is_async:
+            from architectures.async_clustered_dht.node import ChordNode as HashNode
+        else:
+            from architectures.clustered_dht.node import ChordNode as HashNode
+    else:  # semantic
+        if is_async:
+            from architectures.async_semantic_router.node import ChordNode as HashNode
+        else:
+            from architectures.semantic_router.node import ChordNode as HashNode
+    return HashNode
+
+
 def run_disaster_scenario(args, subset_courses, ground_truth):
-    if args.arch == "standard":
+    if base_arch(args.arch) == "standard":
         print("Skipping disaster scenario for Standard DHT (nprobe logic does not apply).")
         return
-        
+
     print(f"\n=== Running {args.arch} Disaster Scenario ===")
-    
+
     node_addresses = get_node_addresses(args.arch)
-    client = xmlrpc.client.ServerProxy(f"http://{node_addresses[0]}", allow_none=True)
-    
+    client = rpc_client(node_addresses[0])
+
     # 1. Inject data
-    inject_data_simple(node_addresses[0], subset_courses, args.arch)
+    bulk_inject(args, node_addresses, subset_courses)
     print("Waiting 15s for full ring stabilization and finger table propagation...")
     time.sleep(15)
-    
+
     # 2. Pick a single target query and find its primary cluster
     test_query = ground_truth[0]
     q_text = test_query["query"]
-    
-    if args.arch == "clustered":
-        from architectures.clustered_dht.node import ChordNode as HashNode
-    else:
-        from architectures.semantic_router.node import ChordNode as HashNode
 
+    HashNode = dummy_node_class(args.arch)
     dummy_node = HashNode("127.0.0.1", 5000)
 
     print(f"Target query: {q_text[:50]}...")
@@ -645,7 +733,7 @@ def run_disaster_scenario(args, subset_courses, ground_truth):
     #    random smattering of clusters, so recall largely survives.
     kills = max(1, min(args.disaster_kills, len(node_addresses) - 1))
     to_kill = [target_node]
-    walker = xmlrpc.client.ServerProxy(f"http://{target_node}", allow_none=True)
+    walker = rpc_client(target_node)
     for _ in range(kills - 1):
         try:
             succ = walker.get_successor()
@@ -654,12 +742,12 @@ def run_disaster_scenario(args, subset_courses, ground_truth):
         if not succ or succ in to_kill:
             break
         to_kill.append(succ)
-        walker = xmlrpc.client.ServerProxy(f"http://{succ}", allow_none=True)
+        walker = rpc_client(succ)
 
     print(f"\nTriggering CORRELATED Disaster: killing {len(to_kill)} adjacent nodes: {to_kill}")
     for addr in to_kill:
         try:
-            xmlrpc.client.ServerProxy(f"http://{addr}", allow_none=True).stop()
+            rpc_client(addr).stop()
         except Exception:
             pass
 
@@ -667,7 +755,7 @@ def run_disaster_scenario(args, subset_courses, ground_truth):
     if not surviving_nodes:
         print("All nodes killed; aborting disaster measurement.")
         return
-    surviving_client = xmlrpc.client.ServerProxy(f"http://{surviving_nodes[0]}", allow_none=True)
+    surviving_client = rpc_client(surviving_nodes[0])
 
     # 4. Let the ring re-stabilize so routing recovers around the dead nodes.
     #    This isolates genuine DATA LOSS from transient routing exceptions:
@@ -716,6 +804,278 @@ def get_vnode_addresses(args):
     return addrs
 
 
+def run_vnode_disaster_scenario(args, subset_courses, ground_truth):
+    """Same correlated-failure mechanic as run_disaster_scenario, but on the
+    large virtual-node ring (get_vnode_addresses) instead of the fixed 5-node
+    ring. Tests whether semantic's disaster-recall disadvantage (a contiguous
+    topic region wiped out) narrows at finer ring granularity: at N=100, each
+    node/vnode owns a much smaller slice of the corpus, so killing RF+1
+    adjacent nodes destroys a much smaller fraction of the ring than at N=5.
+
+    Unlike run_hops_sweep (which deliberately sets RF=0 to isolate pure
+    routing/hop behavior), this KEEPS replication enabled (config.vnodes.yaml
+    default RF=2) since the whole mechanic depends on replicas existing to be
+    wiped out."""
+    if base_arch(args.arch) == "standard":
+        print("Skipping vnode disaster scenario for Standard DHT (nprobe logic does not apply).")
+        return
+
+    print(f"\n=== Running {args.arch} Virtual-Node Disaster Scenario ===")
+
+    node_addresses = get_vnode_addresses(args)
+    print(f"Ring: {len(node_addresses)} virtual nodes across {args.containers} "
+          f"({args.vnodes_per_container}/container).")
+
+    if not wait_for_ring_convergence(node_addresses, timeout=args.converge_timeout):
+        return
+
+    client = rpc_client(node_addresses[0])
+
+    # 1. Inject data (replication stays at config default RF=2 -- no override,
+    #    unlike run_hops_sweep's RF=0).
+    bulk_inject(args, node_addresses, subset_courses)
+    print("Waiting for finger tables to settle before measuring...")
+    wait_for_finger_stability(node_addresses, timeout=args.converge_timeout)
+
+    HashNode = dummy_node_class(args.arch)
+    dummy_node = HashNode("127.0.0.1", 5000)
+
+    # Tag every query with the cluster it "comes from" (its source course's top
+    # cluster). Prefer the value baked into the query file by gen_queries_bigk;
+    # fall back to computing it, so older query files still work.
+    query_clusters = []
+    for gt in ground_truth:
+        qc = gt.get("query_cluster")
+        if qc is None:
+            qc = int(dummy_node._vectorize_and_find_centroids(gt["query"], 1)[0])
+        query_clusters.append(int(qc))
+
+    # 2. Epicenter selection. Default: the HEAVIEST primary node (most primary
+    #    courses) -- the realistic correlated-failure target (an overloaded hot
+    #    node) and the one that maximizes collateral signal. Override with
+    #    --disaster_cluster >= 0 to target a specific cluster's owner instead
+    #    (reproducible across corpora / for the krylov runs).
+    if getattr(args, "disaster_cluster", -1) is not None and args.disaster_cluster >= 0:
+        cluster_hash = dummy_node.get_cluster_hash(args.disaster_cluster)
+        target_node = client.find_successor(str(cluster_hash))
+        print(f"Epicenter: cluster {args.disaster_cluster} -> owner {target_node}.")
+    else:
+        heaviest, best_load = None, -1
+        for addr in node_addresses:
+            try:
+                info = rpc_client(addr).get_info()
+                load = sum(info.get("primary_summary", {}).values())
+            except Exception:
+                continue
+            if load > best_load:
+                best_load, heaviest = load, addr
+        target_node = heaviest
+        print(f"Epicenter: heaviest primary node {target_node} ({best_load} primary courses).")
+
+    # Record the EXACT clusters whose primary copy dies. Killing target + RF
+    # successors permanently destroys only target's primary clusters (their
+    # replicas live on those successors, which we also kill); every other node's
+    # data survives via replicas elsewhere. So target's primary_summary keys ARE
+    # the permanently-destroyed set.
+    try:
+        killed_info = rpc_client(target_node).get_info()
+        killed_clusters = set(int(c) for c in killed_info.get("primary_summary", {}))
+    except Exception:
+        killed_clusters = set()
+    print(f"Destroyed cluster set: {len(killed_clusters)} clusters "
+          f"(sample {sorted(killed_clusters)[:8]}).")
+
+    # nprobe sweep: does higher fanout recover availability under a correlated
+    # failure? Semantic's linear cluster mapping means "adjacent cluster IDs"
+    # (what higher nprobe fans out to) are also ring-adjacent -- likely INSIDE
+    # the same contiguous region the disaster just wiped. Clustered's SHA-1
+    # scatter means the extra probed clusters land on essentially random ring
+    # positions -- more likely to hit a surviving node. Which one actually
+    # benefits more from higher nprobe under disaster is an open question this
+    # sweep answers empirically, not something to assume from the routing story.
+    requested = getattr(args, "nprobe_list", "") or ""
+    default_sweep = ([int(x) for x in requested.split(",") if x.strip()]
+                     if requested.strip() else [1, 5, 20])
+    nprobe_values = [n for n in default_sweep if n <= max(1, dummy_node.k)]
+
+    def measure(rpc, label):
+        recalls_by_nprobe = []      # mean recall per nprobe
+        perq_by_nprobe = []         # per-query recall lists, aligned to ground_truth order
+        for npb in nprobe_values:
+            recalls = []
+            for gt in ground_truth:
+                c_json = json.dumps(gt["course"])
+                try:
+                    (res_tuple, _), _ = run_dht_query(rpc, c_json, npb)
+                    retrieved_ids = [json.loads(r)["course_id"] for r in res_tuple]
+                    recalls.append(compute_recall(gt["ground_truth_ids"], retrieved_ids))
+                except Exception:
+                    recalls.append(0.0)
+            mean_r = sum(recalls) / len(recalls) if recalls else 0.0
+            recalls_by_nprobe.append(mean_r)
+            perq_by_nprobe.append(recalls)
+            print(f"  [{label}] nprobe={npb:2d} -> recall {mean_r*100:5.1f}%")
+        return recalls_by_nprobe, perq_by_nprobe
+
+    print("Running Baseline Queries (nprobe sweep)...")
+    baseline_recalls, baseline_perq = measure(client, "baseline")
+    # Headline granularity: nprobe=5 (matches the 5-node disaster result) if in
+    # the sweep, else the largest nprobe; full curve is in the *_by_nprobe lists.
+    headline_idx = nprobe_values.index(5) if 5 in nprobe_values else len(nprobe_values) - 1
+    head_np = nprobe_values[headline_idx] if nprobe_values else 0
+    mean_baseline = baseline_recalls[headline_idx] if baseline_recalls else 0.0
+
+    # 3. Trigger a CORRELATED failure: kill the primary owner AND its ring
+    #    successors (where RF replicas live) -- same RF+1 mechanic as the
+    #    5-node disaster scenario, just on a much bigger ring.
+    kills = max(1, min(args.disaster_kills, len(node_addresses) - 1))
+    to_kill = [target_node]
+    walker = rpc_client(target_node)
+    for _ in range(kills - 1):
+        try:
+            succ = walker.get_successor()
+        except Exception:
+            break
+        if not succ or succ in to_kill:
+            break
+        to_kill.append(succ)
+        walker = rpc_client(succ)
+
+    print(f"\nTriggering CORRELATED Disaster: killing {len(to_kill)} adjacent vnodes: {to_kill}")
+    for addr in to_kill:
+        try:
+            rpc_client(addr).stop()
+        except Exception:
+            pass
+
+    surviving_nodes = [addr for addr in node_addresses if addr not in to_kill]
+    if not surviving_nodes:
+        print("All nodes killed; aborting disaster measurement.")
+        return
+    surviving_client = rpc_client(surviving_nodes[0])
+
+    # A blind fixed sleep isn't enough to guarantee correctness: closest_preceding_node()
+    # picks a finger table entry WITHOUT checking liveness, and if that entry is a stale
+    # pointer to a now-dead node, find_successor's exception fallback just returns this
+    # node's own successor as a best-effort guess -- not necessarily the true owner. That
+    # self-healing (check_predecessor/stabilize/fix_fingers) is gradual, a few finger slots
+    # per ~1s tick, so a fixed 15s sleep on a 100-node ring risks measuring "disaster recall"
+    # that's contaminated by transient wrong-answer routing, not just genuine data loss.
+    # Re-run the same rigorous convergence gates used for initial ring setup, against the
+    # surviving nodes only, so we measure the true post-healing state.
+    print("Waiting for the surviving ring to heal around the failure (isolating data loss)...")
+    if not wait_for_ring_convergence(surviving_nodes, timeout=args.converge_timeout):
+        print("Surviving ring did not re-converge to a single cycle; aborting disaster measurement.")
+        return
+    wait_for_finger_stability(surviving_nodes, timeout=args.converge_timeout)
+
+    print("Executing queries under disaster conditions (nprobe sweep)...")
+    disaster_recalls, disaster_perq = measure(surviving_client, "disaster")
+    mean_disaster = disaster_recalls[headline_idx] if disaster_recalls else 0.0
+    print(f"Disaster Mean Recall ({len(to_kill)} correlated kills), by nprobe:")
+    for npb, br, dr in zip(nprobe_values, baseline_recalls, disaster_recalls):
+        print(f"  nprobe={npb:2d} -> baseline {br*100:5.1f}%  disaster {dr*100:5.1f}%  "
+              f"(delta {100*(dr-br):+5.1f}pp)")
+
+    # ---- Per-query, per-cluster and region-split reporting (at headline nprobe).
+    # This is where the concentrated-vs-diffuse signal lives; the means above
+    # hide it. Each query carries the cluster it comes from, so we can group by
+    # cluster and split by whether that cluster's primary data was destroyed.
+    from collections import defaultdict
+
+    per_query = []
+    for qi, gt in enumerate(ground_truth):
+        qc = query_clusters[qi]
+        b_curve = [baseline_perq[j][qi] for j in range(len(nprobe_values))]
+        d_curve = [disaster_perq[j][qi] for j in range(len(nprobe_values))]
+        per_query.append({
+            "query_cluster": qc,
+            "ground_truth_clusters": gt.get("ground_truth_clusters"),
+            "in_killed_region": qc in killed_clusters,
+            "baseline_by_nprobe": b_curve,
+            "disaster_by_nprobe": d_curve,
+            "baseline_recall": b_curve[headline_idx],
+            "disaster_recall": d_curve[headline_idx],
+            "drop": b_curve[headline_idx] - d_curve[headline_idx],
+        })
+
+    def _agg(recs):
+        n = len(recs)
+        if not n:
+            return {"n": 0, "mean_baseline": 0.0, "mean_disaster": 0.0, "mean_drop": 0.0}
+        mb = sum(r["baseline_recall"] for r in recs) / n
+        md = sum(r["disaster_recall"] for r in recs) / n
+        return {"n": n, "mean_baseline": mb, "mean_disaster": md, "mean_drop": mb - md}
+
+    # Per-cluster mean recall (grouped by the cluster each query comes from).
+    groups = defaultdict(list)
+    for rec in per_query:
+        groups[rec["query_cluster"]].append(rec)
+    per_cluster = {}
+    for cid, recs in groups.items():
+        a = _agg(recs)
+        a["in_killed_region"] = cid in killed_clusters
+        per_cluster[str(cid)] = a
+
+    # Region split: queries whose home cluster died vs those untouched.
+    in_region = [r for r in per_query if r["in_killed_region"]]
+    outside = [r for r in per_query if not r["in_killed_region"]]
+    region_summary = {
+        "headline_nprobe": head_np,
+        "killed_cluster_count": len(killed_clusters),
+        "in_killed": _agg(in_region),
+        "outside": _agg(outside),
+    }
+
+    # Concentration vs diffusion: how many queries dropped, and by how much.
+    affected = [r for r in per_query if r["drop"] > 1e-9]
+    concentration = {
+        "headline_nprobe": head_np,
+        "n_queries": len(per_query),
+        "n_affected": len(affected),
+        "frac_affected": (len(affected) / len(per_query)) if per_query else 0.0,
+        "mean_drop_all": (sum(r["drop"] for r in per_query) / len(per_query)) if per_query else 0.0,
+        "mean_drop_affected": (sum(r["drop"] for r in affected) / len(affected)) if affected else 0.0,
+        "max_drop": max((r["drop"] for r in per_query), default=0.0),
+    }
+
+    print(f"\nConcentration (nprobe={head_np}): {concentration['n_affected']}/{concentration['n_queries']} "
+          f"queries affected ({concentration['frac_affected']*100:.1f}%); "
+          f"mean drop overall {concentration['mean_drop_all']*100:.1f}pp, "
+          f"among affected {concentration['mean_drop_affected']*100:.1f}pp, "
+          f"max {concentration['max_drop']*100:.1f}pp.")
+    print(f"Region split (nprobe={head_np}): "
+          f"in-killed n={region_summary['in_killed']['n']} "
+          f"{region_summary['in_killed']['mean_baseline']*100:.1f}->{region_summary['in_killed']['mean_disaster']*100:.1f}%  |  "
+          f"outside n={region_summary['outside']['n']} "
+          f"{region_summary['outside']['mean_baseline']*100:.1f}->{region_summary['outside']['mean_disaster']*100:.1f}%")
+
+    disaster_results = {
+        "arch": args.arch,
+        "num_nodes": len(node_addresses),
+        "nprobe_values": nprobe_values,
+        "headline_nprobe": head_np,
+        "baseline_recall_by_nprobe": baseline_recalls,
+        "disaster_recall_by_nprobe": disaster_recalls,
+        "baseline_recall": mean_baseline,
+        "disaster_recall": mean_disaster,
+        "correlated_kills": len(to_kill),
+        "surviving_nodes": len(surviving_nodes),
+        "target_node": target_node,
+        "killed_clusters": sorted(killed_clusters),
+        "concentration": concentration,
+        "region_summary": region_summary,
+        "per_cluster": per_cluster,
+        "per_query": per_query,
+    }
+
+    out_path = os.path.join(project_root(), "data", "benchmarks", "results", "containerized",
+                             f"disaster_results_vnode_{args.arch}.json")
+    with open(out_path, "w") as f:
+        json.dump(disaster_results, f, indent=4)
+    print(f"Vnode disaster results saved to {out_path}")
+
+
 def bulk_load_direct(addresses, courses, dummy_node, batch_size=400):
     """Offline index construction: place every course DIRECTLY on its canonical
     owner instead of routing sequential PUTs. Three speedups make the full 98k
@@ -761,7 +1121,9 @@ def bulk_load_direct(addresses, courses, dummy_node, batch_size=400):
 
     # 2. Client-side owner resolution: successor of the cluster hash over the
     #    known ring membership (equivalent to find_successor once converged).
-    ring = sorted((dummy_node.get_hash(a), a) for a in addresses)
+    #    get_addr_hash (not get_hash) so this matches how the real nodes hash
+    #    their own node_id -- see architectures.async_*.node.get_addr_hash.
+    ring = sorted((dummy_node.get_addr_hash(a), a) for a in addresses)
     ring_ids = [h for h, _ in ring]
     import bisect
     def owner_of(h):
@@ -780,7 +1142,7 @@ def bulk_load_direct(addresses, courses, dummy_node, batch_size=400):
     # 3. Batched delivery.
     placed = 0
     for owner, items in per_owner.items():
-        proxy = xmlrpc.client.ServerProxy(f"http://{owner}", allow_none=True)
+        proxy = rpc_client(owner)
         for s in range(0, len(items), batch_size):
             try:
                 placed += proxy.store_bulk(items[s:s + batch_size])
@@ -788,6 +1150,80 @@ def bulk_load_direct(addresses, courses, dummy_node, batch_size=400):
                 print(f"  store_bulk failed on {owner}: {e}")
     print(f"Bulk-loaded {placed}/{len(courses)} courses onto {len(per_owner)} owner nodes "
           f"({len(set(cluster_of.tolist()))} populated clusters, embed_vectors={embed_vectors}).")
+
+
+def bulk_load_direct_standard(addresses, courses, dummy_node, batch_size=400):
+    """Standard-DHT counterpart of bulk_load_direct: no clustering, each course is
+    placed directly by hashing its own course_id (matching put_course's
+    get_hash(course_id) scheme) instead of routing sequential PUTs. Owners are
+    resolved client-side the same way (successor of the hash over the known ring
+    membership), and delivery is batched via store_bulk."""
+    embed_vectors = len(courses) <= 5000  # keep exact put_course equivalence on small runs
+
+    # get_addr_hash (not get_hash) so this matches how the real nodes hash
+    # their own node_id -- see architectures.async_*.node.get_addr_hash.
+    ring = sorted((dummy_node.get_addr_hash(a), a) for a in addresses)
+    ring_ids = [h for h, _ in ring]
+    import bisect
+    def owner_of(h):
+        i = bisect.bisect_left(ring_ids, h)
+        return ring[i % len(ring)][1]
+
+    per_owner = {}
+    for c in courses:
+        key_hash = dummy_node.get_hash(c["course_id"])
+        owner = owner_of(key_hash)
+        rec = dict(c)
+        if embed_vectors:
+            text = f"{c['course_title']} {c['category']} {c['description']}"
+            rec["vector"] = dummy_node._vectorize(text)
+        per_owner.setdefault(owner, []).append([str(key_hash), json.dumps(rec)])
+
+    placed = 0
+    for owner, items in per_owner.items():
+        proxy = rpc_client(owner)
+        for s in range(0, len(items), batch_size):
+            try:
+                placed += proxy.store_bulk(items[s:s + batch_size])
+            except Exception as e:
+                print(f"  store_bulk failed on {owner}: {e}")
+    print(f"Bulk-loaded {placed}/{len(courses)} courses onto {len(per_owner)} owner nodes "
+          f"(embed_vectors={embed_vectors}).")
+
+
+def bulk_inject(args, node_addresses, courses):
+    """Fast bulk-load replacement for inject_data_simple: resolves owners
+    client-side and ships data via batched store_bulk RPCs instead of routing
+    len(courses) sequential put_course calls one at a time. Used as the shared
+    data-loading step for every experiment mode (scale/fault/join/load/disaster/
+    characterize) across all six architectures.
+
+    Also resets the active-replica-delegation threshold to effectively-disabled
+    (10**9) on every node -- query_load only increments on a LOCAL serve and
+    never on a delegated one, so once it reaches LOAD_THRESHOLD under any
+    sustained query rate (not just genuine concurrent overload; the periodic
+    -1/second decay can't outpace even sequential queries faster than 1/sec)
+    it stays pinned there, silently adding a delegation hop's latency to every
+    later query. run_load_balancing is the only mode that wants this mechanism
+    active, and it already sets its own threshold explicitly before measuring."""
+    print(f"Bulk-loading {len(courses)} courses into {args.arch} cluster via {node_addresses[0]}...")
+    if base_arch(args.arch) == "standard":
+        if args.arch.startswith("async_"):
+            from architectures.async_standard_dht.node import NaiveChordNode as HashNode
+        else:
+            from architectures.standard_dht.node import NaiveChordNode as HashNode
+        dummy_node = HashNode("127.0.0.1", 5000)
+        bulk_load_direct_standard(node_addresses, courses, dummy_node)
+    else:
+        HashNode = dummy_node_class(args.arch)
+        dummy_node = HashNode("127.0.0.1", 5000)
+        bulk_load_direct(node_addresses, courses, dummy_node)
+
+    for addr in node_addresses:
+        try:
+            rpc_client(addr).set_load_threshold(10 ** 9)
+        except Exception:
+            pass
 
 
 def _forms_single_cycle(addresses, succ):
@@ -831,7 +1267,7 @@ def wait_for_ring_convergence(addresses, timeout=180, poll_interval=5, stable_po
         succ, ok = {}, True
         for a in addresses:
             try:
-                succ[a] = xmlrpc.client.ServerProxy(f"http://{a}", allow_none=True).get_successor()
+                succ[a] = rpc_client(a).get_successor()
             except Exception:
                 ok = False
                 break
@@ -862,7 +1298,7 @@ def wait_for_finger_stability(addresses, timeout=600, poll_interval=10, stable_p
         stable = 0
         for a in addresses:
             try:
-                if xmlrpc.client.ServerProxy(f"http://{a}", allow_none=True).is_finger_stable():
+                if rpc_client(a).is_finger_stable():
                     stable += 1
             except Exception:
                 pass
@@ -892,7 +1328,7 @@ def run_hops_sweep(args, subset_courses, ground_truth):
     entry = addresses[0]
     print(f"Ring: {len(addresses)} virtual nodes across {args.containers} "
           f"({args.vnodes_per_container}/container). Entry: {entry}")
-    client = xmlrpc.client.ServerProxy(f"http://{entry}", allow_none=True)
+    client = rpc_client(entry)
 
     # Correctness gate: don't touch the ring until it is a single valid cycle,
     # or bulk-load would resolve owners against a half-formed topology.
@@ -906,7 +1342,7 @@ def run_hops_sweep(args, subset_courses, ground_truth):
     # threshold so every node always serves its own data.
     for a in addresses:
         try:
-            proxy = xmlrpc.client.ServerProxy(f"http://{a}", allow_none=True)
+            proxy = rpc_client(a)
             proxy.set_replication_factor(0)
             proxy.set_load_threshold(10 ** 9)
         except Exception:
@@ -914,14 +1350,10 @@ def run_hops_sweep(args, subset_courses, ground_truth):
 
     # Direct bulk-load (only needed for the recall sanity line; hops are measured
     # regardless of stored data).
-    if args.arch == "standard":
-        from architectures.standard_dht.node import NaiveChordNode as HashNode
+    if base_arch(args.arch) == "standard":
         dummy_node = None
-    elif args.arch == "clustered":
-        from architectures.clustered_dht.node import ChordNode as HashNode
-        dummy_node = HashNode("127.0.0.1", 5000)
     else:
-        from architectures.semantic_router.node import ChordNode as HashNode
+        HashNode = dummy_node_class(args.arch)
         dummy_node = HashNode("127.0.0.1", 5000)
 
     if dummy_node is not None:
@@ -931,13 +1363,13 @@ def run_hops_sweep(args, subset_courses, ground_truth):
     # Cycle correctness established; now wait for the FINGER fixpoint (which sets
     # hop counts). Semantic/clustered expose is_finger_stable(); standard does not,
     # so it falls back to the fixed settle.
-    if args.arch in ("semantic", "clustered"):
+    if base_arch(args.arch) in ("semantic", "clustered"):
         wait_for_finger_stability(addresses, timeout=args.converge_timeout)
     else:
         print(f"Letting finger tables settle {args.finger_settle_sec}s...")
         time.sleep(args.finger_settle_sec)
 
-    use_nprobe = args.arch in ("clustered", "semantic")
+    use_nprobe = base_arch(args.arch) in ("clustered", "semantic")
     k = dummy_node.k if dummy_node is not None else 1
     nprobe_values = [n for n in [1, 2, 3, 5, 8, 12, 20, 40] if n <= max(1, k)] if use_nprobe else [1]
 
@@ -970,17 +1402,26 @@ def run_hops_sweep(args, subset_courses, ground_truth):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--arch", type=str, default="semantic", choices=["standard", "clustered", "semantic"])
-    parser.add_argument("--mode", type=str, default="all", choices=["scale", "fault", "join", "load", "disaster", "characterize", "hops", "all"])
+    parser.add_argument("--arch", type=str, default="semantic",
+                        choices=["standard", "clustered", "semantic",
+                                 "async_standard", "async_clustered", "async_semantic"])
+    parser.add_argument("--mode", type=str, default="all", choices=["scale", "fault", "join", "load", "disaster", "characterize", "hops", "vnode_disaster", "doomed", "all"])
     parser.add_argument("--dataset", type=str, default="kaggle")
     parser.add_argument("--num_nodes", type=int, default=5)
     parser.add_argument("--queries", type=int, default=50)
     parser.add_argument("--dataset_size", type=int, default=500, help="Subset size for tests")
     parser.add_argument("--replication_factor", type=int, default=2, help="DHT replication factor")
     parser.add_argument("--nprobe", type=int, default=2, help="Nprobe for query fanout")
-    parser.add_argument("--disaster_kills", type=int, default=2,
+    parser.add_argument("--disaster_kills", type=int, default=3,
                         help="Number of ADJACENT nodes to kill in the disaster scenario "
-                             "(models a correlated rack/AZ failure; RF+1 wipes a region entirely)")
+                             "(models a correlated rack/AZ failure; RF+1 wipes a region entirely -- "
+                             "with the default replication_factor=2, that means 3 kills, since "
+                             "sync_replicas_to_successors pushes each node's primary data to BOTH "
+                             "its 1-hop and 2-hop successor, so 2 kills can never fully wipe a cluster)")
+    parser.add_argument("--disaster_cluster", type=int, default=-1,
+                        help="vnode_disaster epicenter: target this specific cluster's owner. "
+                             "Default -1 = target the heaviest primary node (realistic hot-node "
+                             "failure). Set a fixed cluster id for reproducibility across corpora.")
     parser.add_argument("--containers", type=str,
                         default="v-bootstrap,v-node-1,v-node-2,v-node-3,v-node-4",
                         help="Comma-separated container hostnames for the virtual-node ring (mode=hops).")
@@ -989,12 +1430,19 @@ def main():
     parser.add_argument("--converge_timeout", type=int, default=180,
                         help="Max seconds to wait for the ring to form a single valid successor cycle (mode=hops).")
     parser.add_argument("--queries_file", type=str, default=None,
-                        help="Override the fixed query set (e.g. data/benchmarks/queries_98k_k4096.json "
+                        help="Override the fixed query set (e.g. data/benchmarks/queries/queries_98k_k4096.json "
                              "for the full-corpus scaling experiment).")
     parser.add_argument("--finger_settle_sec", type=int, default=25,
                         help="Seconds to let finger tables settle after the cycle is valid, before measuring hops.")
     parser.add_argument("--gen-queries", action="store_true",
                         help="Pre-generate and save a fixed queries.json for reproducible cross-architecture benchmarks.")
+    parser.add_argument("--doomed_queries", type=int, default=15,
+                        help="Number of cooked test queries to build from the doomed cluster's own "
+                             "member courses (mode=doomed).")
+    parser.add_argument("--nprobe_list", type=str, default="",
+                        help="Comma-separated nprobe values to sweep (mode=doomed). Empty = built-in "
+                             "full sweep. Use to trim the low end for faster diagnostic runs, "
+                             "e.g. --nprobe_list 1,20,80,320,640")
     args = parser.parse_args()
 
     # Special mode: just generate the fixed query file and exit
@@ -1020,9 +1468,17 @@ def main():
         run_disaster_scenario(args, subset_courses, ground_truth)
     if args.mode == "characterize" or args.mode == "all":
         run_characterization(args, subset_courses, ground_truth)
-    # 'hops' targets the virtual-node scaling ring (v-* containers), standalone.
+    # 'hops', 'vnode_disaster' and 'doomed' target the virtual-node scaling ring
+    # (v-* containers), standalone.
     if args.mode == "hops":
         run_hops_sweep(args, subset_courses, ground_truth)
+    if args.mode == "vnode_disaster":
+        run_vnode_disaster_scenario(args, subset_courses, ground_truth)
+    if args.mode == "doomed":
+        # Lazy import: doomed_scenario.py imports helpers FROM this module, so
+        # importing it at module load time would create a circular import.
+        from benchmarks.containerized.doomed_scenario import run_doomed_scenario
+        run_doomed_scenario(args, subset_courses)
 
 if __name__ == "__main__":
     main()

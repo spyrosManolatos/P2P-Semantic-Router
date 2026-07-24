@@ -1,0 +1,114 @@
+networks:
+  ring_net:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+services:
+  async-standard-bootstrap:
+    build:
+      context: ../..
+      dockerfile: containerized_environment/Dockerfile
+    image: p2p-semantic-router:latest
+    container_name: async-standard-bootstrap
+    command: ["--arch", "async_standard", "--ip", "async-standard-bootstrap", "--port", "5000"]
+    networks:
+      ring_net:
+        ipv4_address: 172.30.0.10
+    ports:
+      - "8111:5000"
+    volumes:
+      - ../../data:/app/data
+      - ../../src:/app/src
+
+  async-standard-node-1:
+    image: p2p-semantic-router:latest
+    container_name: async-standard-node-1
+    command: ["--arch", "async_standard", "--ip", "async-standard-node-1", "--port", "5000", "--bootstrap", "async-standard-bootstrap:5000"]
+    depends_on:
+      - async-standard-bootstrap
+    networks:
+      ring_net:
+        ipv4_address: 172.30.0.11
+    ports:
+      - "8112:5000"
+    volumes:
+      - ../../data:/app/data
+      - ../../src:/app/src
+
+  async-standard-node-2:
+    image: p2p-semantic-router:latest
+    container_name: async-standard-node-2
+    command: ["--arch", "async_standard", "--ip", "async-standard-node-2", "--port", "5000", "--bootstrap", "async-standard-bootstrap:5000"]
+    depends_on:
+      - async-standard-bootstrap
+    networks:
+      ring_net:
+        ipv4_address: 172.30.0.12
+    ports:
+      - "8113:5000"
+    volumes:
+      - ../../data:/app/data
+      - ../../src:/app/src
+
+  async-standard-node-3:
+    image: p2p-semantic-router:latest
+    container_name: async-standard-node-3
+    command: ["--arch", "async_standard", "--ip", "async-standard-node-3", "--port", "5000", "--bootstrap", "async-standard-bootstrap:5000"]
+    depends_on:
+      - async-standard-bootstrap
+    networks:
+      ring_net:
+        ipv4_address: 172.30.0.13
+    ports:
+      - "8114:5000"
+    volumes:
+      - ../../data:/app/data
+      - ../../src:/app/src
+
+  async-standard-node-4:
+    image: p2p-semantic-router:latest
+    container_name: async-standard-node-4
+    command: ["--arch", "async_standard", "--ip", "async-standard-node-4", "--port", "5000", "--bootstrap", "async-standard-bootstrap:5000"]
+    depends_on:
+      - async-standard-bootstrap
+    networks:
+      ring_net:
+        ipv4_address: 172.30.0.14
+    ports:
+      - "8115:5000"
+    volumes:
+      - ../../data:/app/data
+      - ../../src:/app/src
+
+  async-standard-node-5:
+    image: p2p-semantic-router:latest
+    container_name: async-standard-node-5
+    command: ["--arch", "async_standard", "--ip", "async-standard-node-5", "--port", "5000"]
+    networks:
+      ring_net:
+        ipv4_address: 172.30.0.15
+    ports:
+      - "8116:5000"
+    volumes:
+      - ../../data:/app/data
+      - ../../src:/app/src
+
+  async-standard-runner:
+    image: p2p-semantic-router:latest
+    container_name: async-standard-runner
+    profiles:
+      - runner
+    depends_on:
+      - async-standard-bootstrap
+      - async-standard-node-1
+      - async-standard-node-2
+      - async-standard-node-3
+      - async-standard-node-4
+      - async-standard-node-5
+    networks:
+      - ring_net
+    volumes:
+      - ../../data:/app/data
+      - ../../src:/app/src
+    entrypoint: ["python", "-m", "src.benchmarks.containerized.evaluate", "--arch", "async_standard", "--mode", "all", "--num_nodes", "5"]

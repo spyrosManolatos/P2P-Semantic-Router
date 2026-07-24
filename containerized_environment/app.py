@@ -15,7 +15,10 @@ if not os.environ.get("CONFIG_PATH"):
 
 def main():
     parser = argparse.ArgumentParser(description="P2P DHT Node service")
-    parser.add_argument("--arch", type=str, default="semantic", choices=["standard", "clustered", "semantic"], help="Topological architecture to run")
+    parser.add_argument("--arch", type=str, default="semantic",
+                        choices=["standard", "clustered", "semantic",
+                                 "async_standard", "async_clustered", "async_semantic"],
+                        help="Topological architecture to run")
     parser.add_argument("--ip", type=str, required=True, help="IP or Hostname this node announces to others")
     parser.add_argument("--port", type=int, default=5000, help="Port this node listens on")
     parser.add_argument("--bootstrap", type=str, default=None, help="Address of the bootstrap node (host:port)")
@@ -52,6 +55,18 @@ def main():
                 time.sleep(1)
             except IOError:
                 pass
+
+    elif args.arch in ("async_standard", "async_clustered", "async_semantic"):
+        # uvicorn.Server.run() owns the event loop and blocks until shutdown;
+        # join() and the periodic stabilization loop run inside it (see
+        # core.async_node_server.build_app's lifespan).
+        if args.arch == "async_standard":
+            from architectures.async_standard_dht.server import run_node
+        elif args.arch == "async_clustered":
+            from architectures.async_clustered_dht.server import run_node
+        else:
+            from architectures.async_semantic_router.server import run_node
+        run_node(args.ip, args.port, args.bootstrap, args.dataset)
 
     else:
         if args.arch == "clustered":
