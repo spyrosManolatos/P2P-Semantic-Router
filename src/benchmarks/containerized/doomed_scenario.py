@@ -167,7 +167,7 @@ def run_doomed_scenario(args, subset_courses):
                 try:
                     (res_tuple, hops), _ = run_dht_query(rpc, c_json, npb)
                     retrieved_ids = [json.loads(r)["course_id"] for r in res_tuple]
-                    r_this.append(compute_recall(gt["ground_truth_ids"], retrieved_ids))
+                    r_this.append(compute_recall(retrieved_ids, gt["ground_truth_ids"]))
                     h_this.append(hops)
                 except Exception:
                     r_this.append(0.0)

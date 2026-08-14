@@ -127,32 +127,6 @@ def run_failure_scenario():
     teardown_network(nodes)
 
 
-def run_load_balancing_scenario():
-    print_separator()
-    print("SCENARIO: Replica Query Delegation (Active Load Balancing)")
-    print_separator()
-    
-    # Set active replication factor to 2 so load balancing can delegate to a replica node
-    nodes = setup_network(num_nodes=4, r=2)
-    courses = load_simulation_courses()
-    inject_courses(nodes, courses)
-    
-    query_course = random.choice(courses)
-    query_json = json.dumps(query_course)
-    
-    query_node = random.choice(nodes)
-    print(f"Blasting node {query_node.address} with 6 rapid-fire queries (Load Threshold is 3)...")
-    
-    for i in range(1, 7):
-        start_time = time.time()
-        results = query_node.get_similar_courses(query_json, nprobe=1)
-        dur = (time.time() - start_time) * 1000
-        print(f"  [Query {i}/6] Returned {len(results)} courses in {dur:.1f}ms")
-        time.sleep(0.05)
-        
-    teardown_network(nodes)
-
-
 def run_join_scenario():
     print_separator()
     print("SCENARIO: Node Joining & Automatic Data Migration")
@@ -222,7 +196,7 @@ def main():
         "--scenario",
         type=str,
         default="routing",
-        choices=["routing", "failure", "load_balancing", "join", "boot"],
+        choices=["routing", "failure", "join", "boot"],
         help="The simulation scenario to run"
     )
     args = parser.parse_args()
@@ -231,8 +205,6 @@ def main():
         run_routing_scenario()
     elif args.scenario == "failure":
         run_failure_scenario()
-    elif args.scenario == "load_balancing":
-        run_load_balancing_scenario()
     elif args.scenario == "join":
         run_join_scenario()
     elif args.scenario == "boot":

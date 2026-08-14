@@ -201,43 +201,12 @@ def plot_node_join():
     plt.close()
     print("Generated node join metrics plot.")
 
-def plot_load_balancing():
-    results_path = os.path.join(results_dir, "load_balancing_results.json")
-    if not os.path.exists(results_path):
-        print(f"Skipping load balancing plots: {results_path} not found.")
-        return
-        
-    with open(results_path, "r") as f:
-        data = json.load(f)
-        
-    concurrencies = data["concurrency_levels"]
-    with_lb = data["with_load_balancing"]
-    without_lb = data["without_load_balancing"]
-    
-    plt.figure(figsize=(8, 5))
-    plt.title("Active Replica Load Balancing Performance under Concurrency", fontsize=13, fontweight='bold')
-    plt.xlabel("Query Concurrency Level (Concurrent Requests)")
-    plt.ylabel("Average Latency (ms)")
-    
-    plt.plot(concurrencies, with_lb, color='#1f77b4', marker='o', linewidth=2.5, label="With Active Delegation (LB Enabled)")
-    plt.plot(concurrencies, without_lb, color='#d62728', marker='x', linewidth=2.5, linestyle='--', label="No Delegation (LB Disabled)")
-    
-    plt.xticks(concurrencies)
-    plt.legend(loc="upper left")
-    plt.tight_layout()
-    
-    out_path = os.path.join(plots_dir, "load_balancing_metrics.png")
-    plt.savefig(out_path, dpi=300)
-    plt.close()
-    print("Generated load balancing metrics plot.")
-
 def main():
     os.makedirs(results_dir, exist_ok=True)
     os.makedirs(plots_dir, exist_ok=True)
     plot_scale()
     plot_fault_tolerance()
     plot_node_join()
-    plot_load_balancing()
 
 if __name__ == "__main__":
     main()

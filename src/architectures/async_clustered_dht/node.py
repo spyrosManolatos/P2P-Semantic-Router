@@ -764,14 +764,63 @@ class ChordNode:
 
     FINGERS_PER_ROUND = 8
 
+    def _redundant_finger_cutoff(self) -> int:
+        """Index of the first finger whose target can lie beyond our own successor.
+
+        Finger i targets node_id + 2^i. While that offset still falls inside the
+        arc (node_id, successor], find_successor() answers `self.successor` from
+        its first branch -- locally, without an RPC -- so the entry holds nothing
+        the successor pointer does not already say. On a ring of N nodes the arc
+        averages 2^m / N, leaving only the top O(log N) fingers able to differ;
+        everything below is a fixed prefix that moves only when the successor does.
+
+        Finger VALUES are unaffected by using this boundary: the prefix is still
+        written, taken from the successor pointer instead of from a lookup that
+        would have returned it anyway. What shrinks is the SWEEP -- m entries
+        (20 rounds at 8/round, so ~20s before is_finger_stable() can first report
+        True) become O(log N) entries, a couple of rounds. Since
+        wait_for_finger_stability() requires every node to report a completed
+        zero-change sweep at the same time, sweep length is what sets convergence
+        time, and how attainable that global condition stays as N grows."""
+        gap = (self.successor_id - self.node_id) % (2 ** self.m)
+        if gap == 0:
+            # Sole node on the ring (successor is self): no finger can point
+            # anywhere else, so the prefix is the entire table.
+            return self.m
+        return min(self.m, gap.bit_length())
+
     async def fix_fingers(self):
         """Sequential finger repair (the Chord paper's next-counter variant, not
-        random sampling), several entries per stabilization round."""
+        random sampling), several entries per stabilization round -- restricted to
+        the entries that can actually differ (see _redundant_finger_cutoff)."""
         if not hasattr(self, "_fix_next"):
             self._fix_next = 0
             self._sweep_changes = 0
             self._last_sweep_changes = -1
+
+        cutoff = self._redundant_finger_cutoff()
+
+        # Re-point the redundant prefix at the current successor every round. It
+        # costs no RPC, and it has to be eager rather than one entry per round: a
+        # successor change invalidates the whole prefix at once. Counting those
+        # writes also stops a node from claiming a fixpoint while its successor
+        # is still moving.
+        for i in range(cutoff):
+            if self.finger_table[i] != self.successor:
+                self.finger_table[i] = self.successor
+                self._sweep_changes += 1
+
+        if cutoff >= self.m:
+            # Nothing left to resolve -- the prefix above is the whole table.
+            self._last_sweep_changes = self._sweep_changes
+            self._sweep_changes = 0
+            return
+
         for _ in range(self.FINGERS_PER_ROUND):
+            # The cutoff moves with the successor, so re-anchor if it drifted out
+            # of the resolvable range.
+            if not (cutoff <= self._fix_next < self.m):
+                self._fix_next = cutoff
             i = self._fix_next
             target_id = (self.node_id + (2 ** i)) % (2 ** self.m)
             try:
@@ -783,13 +832,13 @@ class ChordNode:
                 self._sweep_changes += 1
             self._fix_next += 1
             if self._fix_next >= self.m:
-                self._fix_next = 0
+                self._fix_next = cutoff
                 self._last_sweep_changes = self._sweep_changes
                 self._sweep_changes = 0
 
     def is_finger_stable(self) -> bool:
-        """True once the most recent complete fix_fingers sweep over all m entries
-        produced zero changes -- this node's routing state has reached a fixpoint."""
+        """True once the most recent complete fix_fingers sweep produced zero
+        changes -- this node's routing state has reached a fixpoint."""
         return getattr(self, "_last_sweep_changes", -1) == 0
 
     async def check_predecessor(self):

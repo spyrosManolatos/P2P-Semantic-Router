@@ -94,6 +94,29 @@ services:
       - ../../data:/app/data
       - ../../src:/app/src
 
+  async-gateway:
+    image: p2p-semantic-router:latest
+    container_name: async-gateway
+    entrypoint: ["uvicorn", "api.main:app", "--app-dir", "src", "--host", "0.0.0.0", "--port", "8080"]
+    environment:
+      - TRANSPORT=json
+      - DHT_NODES=async-bootstrap-node:5000,async-node-1:5000,async-node-2:5000,async-node-3:5000,async-node-4:5000
+      - GATEWAY_TITLE=P2P Semantic Router (async)
+    depends_on:
+      - async-bootstrap-node
+      - async-node-1
+      - async-node-2
+      - async-node-3
+      - async-node-4
+    networks:
+      ring_net:
+        ipv4_address: 172.30.0.20
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../../data:/app/data
+      - ../../src:/app/src
+
   async-semantic-runner:
     image: p2p-semantic-router:latest
     container_name: async-semantic-runner

@@ -52,8 +52,7 @@ class NaiveChordNode:
         else:
             centroids_path = config['storage']['centroids']['kaggle_dataset_path']
         self.vocab = self._load_vocab(centroids_path)
-        self.query_load = 0
-        
+
         # Bind to 0.0.0.0 for external access in containerized environments (unless localhost/127.0.0.1)
         bind_ip = ip
         if ip not in ["127.0.0.1", "localhost"]:

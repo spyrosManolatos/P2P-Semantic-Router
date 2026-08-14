@@ -158,13 +158,7 @@ To run the local simulation scenarios, execute the following from the project ro
     python3 local_simulation/run_simulation.py --scenario failure
     ```
 
-*   **Scenario 3: Replica CPU Load Balancing**
-    Blasts a specific node with concurrent queries, proving active replica delegation:
-    ```bash
-    python3 local_simulation/run_simulation.py --scenario load_balancing
-    ```
-
-*   **Scenario 4: Dynamic Node Join**
+*   **Scenario 3: Dynamic Node Join**
     Joins a new node to the active network, proving automatic data migration:
     ```bash
     python3 local_simulation/run_simulation.py --scenario join
@@ -251,36 +245,40 @@ The project ships with a small **HTTP gateway application** that lets you run li
 Each query enters the ring through a **random node**, simulating an arbitrary peer receiving a request in a real P2P deployment (a specific entry node can also be forced via the API).
 
 ### 1. Start a cluster with its gateway
-The gateway is part of the compose stacks:
+Every compose stack ships the gateway. The **async** stacks are the reported architecture (FastAPI/httpx):
 
-*   **Semantic Router** — gateway at **http://localhost:8080**:
+*   **Async Semantic Router** — gateway at **http://localhost:8080**:
     ```bash
-    cd containerized_environment/semantic_router
+    cd containerized_environment/async_semantic_router
     docker compose up -d --build
     ```
-*   **Clustered DHT** — gateway at **http://localhost:8081**:
+*   **Async Clustered DHT** — gateway at **http://localhost:8081**:
     ```bash
-    cd containerized_environment/clustered_dht
+    cd containerized_environment/async_clustered_dht
     docker compose up -d --build
     ```
-(`--build` is only needed the first time, or after changing `requirements.txt`; both stacks can run side by side for an A/B comparison.)
+(`--build` is only needed the first time, or after changing `requirements.txt`. The legacy **sync** XML-RPC stacks under `semantic_router/` and `clustered_dht/` also carry a `gateway` on the same ports.)
 
 > **Configuration note:** the gateway ([`src/api/main.py`](src/api/main.py)) is not hardcoded to
-> either architecture — which nodes it talks to (`DHT_NODES`, a comma-separated address list) and
-> its display name (`GATEWAY_TITLE`) are set via environment variables in each stack's
-> `docker-compose.yml`. That's why the same gateway code serves both the Semantic Router stack
-> (`DHT_NODES=bootstrap-node:5000,node-1:5000,...`) and the Clustered DHT stack
-> (`DHT_NODES=clustered-bootstrap:5000,clustered-node-1:5000,...,GATEWAY_TITLE=P2P Clustered DHT`)
-> without any code changes — only the compose file's environment differs.
+> either architecture or transport. Which nodes it talks to (`DHT_NODES`), its display name
+> (`GATEWAY_TITLE`), and the RPC transport (`TRANSPORT=xmlrpc` for the sync stacks, `TRANSPORT=json`
+> for the async FastAPI/httpx stacks) are all set via environment variables in each stack's
+> `docker-compose.yml`. That's why the same gateway image serves the sync Semantic Router/Clustered
+> stacks *and* the async ones (`DHT_NODES=async-bootstrap-node:5000,...`, `TRANSPORT=json`) with no
+> code changes — only the compose environment differs.
 
 ### 2. Inject data
 Node storage is **in-memory**, so the ring starts empty after every `up`/restart. Fill it with the Kaggle course dataset:
 ```bash
-# Semantic Router stack
-docker compose exec gateway python src/scripts/inject_data.py --limit 500
+# Async Semantic Router stack (TRANSPORT=json)
+docker compose exec async-gateway python src/scripts/inject_data.py \
+    --node async-bootstrap-node:5000 --limit 500 --transport json
 
-# Clustered DHT stack
-docker compose exec clustered-gateway python src/scripts/inject_data.py --node clustered-bootstrap:5000 --limit 500
+# Async Clustered DHT stack
+docker compose exec async-clustered-gateway python src/scripts/inject_data.py \
+    --node async-clustered-bootstrap:5000 --limit 500 --transport json
+
+# (legacy sync stacks: omit --transport; e.g. `docker compose exec gateway python src/scripts/inject_data.py --limit 500`)
 ```
 `--limit N` controls how many courses are injected (`0` = the entire dataset). Any ring node works as the injection point — `put_course` routes each record to its responsible peer.
 

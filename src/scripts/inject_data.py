@@ -20,6 +20,8 @@ def main():
     parser = argparse.ArgumentParser(description="Inject courses into a running DHT ring")
     parser.add_argument("--node", type=str, default="bootstrap-node:5000", help="Any ring node (host:port)")
     parser.add_argument("--limit", type=int, default=500, help="Number of courses to inject (0 = all)")
+    parser.add_argument("--transport", choices=["xmlrpc", "json"], default="xmlrpc",
+                        help="xmlrpc for the sync stacks; json for the async (FastAPI/httpx) stacks")
     args = parser.parse_args()
 
     config = load_config()
@@ -29,7 +31,11 @@ def main():
     if args.limit > 0:
         courses = courses[: args.limit]
 
-    client = xmlrpc.client.ServerProxy(f"http://{args.node}", allow_none=True)
+    if args.transport == "json":
+        from core.json_rpc_client import JSONRPCProxy
+        client = JSONRPCProxy(args.node)
+    else:
+        client = xmlrpc.client.ServerProxy(f"http://{args.node}", allow_none=True)
     print(f"Injecting {len(courses)} courses via {args.node}...")
     for i, course in enumerate(courses):
         client.put_course(json.dumps(course))

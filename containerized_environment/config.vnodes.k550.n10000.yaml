@@ -21,7 +21,7 @@ dht:
 storage:
   centroids:
     synthetic_path: "data/models/synthetic_centroids.json"
-    kaggle_dataset_path: "data/models/kaggle_centroids_k5500.json"
+    kaggle_dataset_path: "data/models/kaggle_centroids_k550_n10000.json"
   data:
     synthetic_path: "data/raw/synthetic_data.json"
     kaggle:

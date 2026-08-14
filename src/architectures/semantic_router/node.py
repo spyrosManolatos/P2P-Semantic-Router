@@ -87,10 +87,6 @@ class ChordNode:
         self.server_thread = None
         self.worker_thread = None
 
-        # Load balancing metrics
-        self.query_load = 0
-        self.LOAD_THRESHOLD = self.config['storage']['load_threshold']
-
         # Load global centroid table
         self.k = 0
         self.n_features = 0
@@ -391,19 +387,6 @@ class ChordNode:
         return success
 
     def retrieve_local(self, cluster_id: int, is_replica_request: bool = False) -> List[str]:
-        # 1. Load Balancing Delegation (Active Replica)
-        if not is_replica_request and self.query_load >= self.LOAD_THRESHOLD and self.successor != self.address:
-            print(f"[{self.address}] ⚠️ OVERLOADED! (Load: {self.query_load}). Delegating read query to Replica at {self.successor}...")
-            try:
-                with self._get_rpc_client(self.successor) as succ:
-                    return succ.retrieve_local(cluster_id, True)
-            except Exception as e:
-                print(f"[{self.address}] ❌ Failed to delegate to replica: {e}")
-                # Fallback to serving locally if delegation fails
-                pass
-                
-        # 2. Serve Locally
-        self.query_load += 1
         if str(cluster_id) in self.storage:
             return list(self.storage[str(cluster_id)].values())
         return []
@@ -563,11 +546,6 @@ class ChordNode:
             "primary_summary": primary_summary,
             "replica_summary": replica_summary
         }
-
-    def set_load_threshold(self, threshold: int) -> bool:
-        self.LOAD_THRESHOLD = threshold
-        print(f"[{self.address}] Query delegation threshold updated to {threshold}")
-        return True
 
     # --- Client / Node API ---
 
@@ -944,9 +922,6 @@ class ChordNode:
                     self.stabilize()
                     self.fix_fingers()
                     self.check_predecessor()
-                    # Cool down CPU load
-                    if self.query_load > 0:
-                        self.query_load -= 1
                     # Periodic shard snapshot (~every 10 rounds, only if dirty;
                     # no-op unless SHARD_DIR is set).
                     self._worker_ticks = getattr(self, "_worker_ticks", 0) + 1

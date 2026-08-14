@@ -20,7 +20,10 @@ x-vnode-common: &vnode-common
     - ../data:/app/data
     - ../src:/app/src
     - ./async_app_vnodes.py:/app/containerized_environment/async_app_vnodes.py
-    - ./config.vnodes.yaml:/app/containerized_environment/config.vnodes.yaml
+    # Host side is overridable (CONFIG_FILE) so a K-specific config (different
+    # centroid artifact) can be swapped in without touching CONFIG_PATH, which
+    # every service already points at this fixed in-container path.
+    - ${CONFIG_FILE:-./config.vnodes.yaml}:/app/containerized_environment/config.vnodes.yaml
 
 services:
   av-bootstrap:

@@ -46,34 +46,6 @@ def inject_data_simple(nodes, courses, arch_name):
             print(f"  {i+1}/{len(courses)} injected...")
     print("Injection complete.\n")
 
-# --- CONCURRENCY work for load balancing benchmark ---
-def send_concurrency_query(address, course_json, nprobe):
-    client = xmlrpc.client.ServerProxy(f"http://{address}")
-    start = time.time()
-    try:
-        client.get_similar_courses(course_json, nprobe)
-    except Exception as e:
-        pass
-    return (time.time() - start) * 1000
-
-def run_concurrent_batch(address, batch_size, courses, nprobe):
-    batch_courses = [random.choice(courses) for _ in range(batch_size)]
-    with concurrent.futures.ThreadPoolExecutor(max_workers=batch_size) as executor:
-        futures = [
-            executor.submit(send_concurrency_query, address, json.dumps(c), nprobe)
-            for c in batch_courses
-        ]
-        latencies = [f.result() for f in concurrent.futures.as_completed(futures)]
-    return sum(latencies) / len(latencies)
-
-def set_network_threshold(nodes, threshold):
-    for node in nodes:
-        try:
-            client = xmlrpc.client.ServerProxy(f"http://{node.address}")
-            client.set_load_threshold(threshold)
-        except Exception:
-            pass
-
 # =====================================================================
 # BENCHMARK MODES
 # =====================================================================
@@ -365,50 +337,6 @@ def run_node_join(args, subset_courses, ground_truth):
         json.dump(join_results, f, indent=4)
     print(f"Node join results saved to {out_path}")
 
-def run_load_balancing(args, subset_courses, ground_truth):
-    print("\n=== Running Concurrency & Active Load Balancing Benchmark ===")
-    nodes = setup_semantic(num_nodes=args.num_nodes, base_port=8600, r=args.replication_factor, dataset=args.dataset)
-    print("Waiting 10s for Chord ring stabilization...")
-    time.sleep(10)
-    
-    inject_data_simple(nodes, subset_courses, "semantic_router")
-    print("Waiting 5s for replication to settle...")
-    time.sleep(5)
-    
-    concurrency_workloads = [1, 2, 4, 8, 12, 16]
-    load_results = {
-        "concurrency_levels": concurrency_workloads,
-        "with_load_balancing": [],
-        "without_load_balancing": []
-    }
-    
-    # Test 1: With LB (threshold=3)
-    print("Evaluating WITH Active Load Balancing (Threshold = 3)...")
-    set_network_threshold(nodes, 3)
-    time.sleep(1)
-    
-    query_node_addr = nodes[0].address
-    for batch_size in concurrency_workloads:
-        avg_latency = run_concurrent_batch(query_node_addr, batch_size, subset_courses, args.nprobe)
-        load_results["with_load_balancing"].append(avg_latency)
-        time.sleep(1)
-        
-    # Test 2: Without LB (threshold=99999)
-    print("Evaluating WITHOUT Load Balancing (Delegation Disabled)...")
-    set_network_threshold(nodes, 99999)
-    time.sleep(1)
-    
-    for batch_size in concurrency_workloads:
-        avg_latency = run_concurrent_batch(query_node_addr, batch_size, subset_courses, args.nprobe)
-        load_results["without_load_balancing"].append(avg_latency)
-        time.sleep(1)
-        
-    teardown_semantic(nodes)
-    out_path = os.path.join(project_root(), "data", "benchmarks", "results", "local", "load_balancing_results.json")
-    with open(out_path, "w") as f:
-        json.dump(load_results, f, indent=4)
-    print(f"Load balancing results saved to {out_path}")
-
 
 # =====================================================================
 # SYSTEM UTILS
@@ -418,7 +346,7 @@ def project_root():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", type=str, default="all", choices=["scale", "fault", "join", "load", "all"])
+    parser.add_argument("--mode", type=str, default="all", choices=["scale", "fault", "join", "all"])
     parser.add_argument("--dataset", type=str, default="kaggle")
     parser.add_argument("--num_nodes", type=int, default=6)
     parser.add_argument("--queries", type=int, default=5)
@@ -473,9 +401,6 @@ def main():
         join_args = argparse.Namespace(**vars(args))
         join_args.num_nodes = 5
         run_node_join(join_args, subset_courses, ground_truth)
-        
-    if args.mode in ["load", "all"]:
-        run_load_balancing(args, subset_courses, ground_truth)
 
 if __name__ == "__main__":
     main()

@@ -21,5 +21,4 @@ storage:
       raw_path: "data/raw/udemy_courses.csv"
       normalized_path: "data/raw/normalized_kaggle_courses.json"
   num_courses: 500
-  load_threshold: 3
 

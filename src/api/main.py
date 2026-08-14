@@ -45,8 +45,20 @@ class QueryRequest(BaseModel):
     entry_node: Optional[str] = Field(None, description="Force a specific entry node (host:port). Random if omitted.")
 
 
-def _rpc(address: str) -> xmlrpc.client.ServerProxy:
-    return xmlrpc.client.ServerProxy(f"http://{address}", allow_none=True)
+# Transport selection: the sync stacks speak XML-RPC; the async (FastAPI/httpx)
+# stacks speak JSON-RPC over POST /rpc/{method}. TRANSPORT=json switches the
+# client so one gateway image serves both. JSONRPCProxy mirrors ServerProxy's
+# call interface (proxy.method(*args) -> result), so nothing else changes.
+TRANSPORT = os.environ.get("TRANSPORT", "xmlrpc").lower()
+
+if TRANSPORT == "json":
+    from core.json_rpc_client import JSONRPCProxy
+
+    def _rpc(address: str) -> "JSONRPCProxy":
+        return JSONRPCProxy(address, timeout=RPC_TIMEOUT_SECONDS)
+else:
+    def _rpc(address: str) -> xmlrpc.client.ServerProxy:
+        return xmlrpc.client.ServerProxy(f"http://{address}", allow_none=True)
 
 
 def _ring_pct(hash_str: str, bits: int) -> float:

@@ -66,35 +66,6 @@ def inject_data_simple(node_address, courses, arch_name):
             print(f"  {i+1}/{len(courses)} injected...")
     print("Injection complete.\n")
 
-# --- CONCURRENCY work for load balancing benchmark ---
-def send_concurrency_query(address, course_json, nprobe):
-    client = rpc_client(address)
-    start = time.perf_counter()  # monotonic clock: never runs backwards
-    try:
-        client.get_similar_courses(course_json, nprobe)
-    except Exception as e:
-        pass
-    return (time.perf_counter() - start) * 1000
-
-def run_concurrent_batch(address, batch_size, courses, nprobe, hotspot_course=None):
-    # To exercise active replica delegation we must create a HOTSPOT: every
-    # concurrent query targets the SAME course (hence the same cluster, hence
-    # the same owner node), concentrating load on a single peer. Sending random
-    # courses would spread the load across owners and the mechanism would never
-    # trigger. When hotspot_course is None we fall back to a random workload.
-    if hotspot_course is not None:
-        batch_courses = [hotspot_course] * batch_size
-    else:
-        batch_courses = [random.choice(courses) for _ in range(batch_size)]
-    with concurrent.futures.ThreadPoolExecutor(max_workers=batch_size) as executor:
-        futures = []
-        for c in batch_courses:
-            futures.append(
-                executor.submit(send_concurrency_query, address, json.dumps(c), nprobe)
-            )
-        latencies = [f.result() for f in concurrent.futures.as_completed(futures)]
-    return sum(latencies) / len(latencies)
-
 def get_node_addresses(arch):
     if arch == "standard":
         return [
@@ -205,7 +176,7 @@ def run_scaling(args, subset_courses, ground_truth):
             try:
                 (res_tuple, hops), latency = run_dht_query(client, c_json, np if use_nprobe else None)
                 retrieved_ids = [json.loads(r)["course_id"] for r in res_tuple]
-                recall = compute_recall(gt["ground_truth_ids"], retrieved_ids)
+                recall = compute_recall(retrieved_ids, gt["ground_truth_ids"])
                 
                 benchmark_results["dht_results"][np_key]["recall"].append(recall)
                 benchmark_results["dht_results"][np_key]["hops"].append(hops)
@@ -296,7 +267,7 @@ def run_fault_tolerance(args, subset_courses, ground_truth):
         try:
             (res_tuple, hops), latency = run_dht_query(client, c_json, args.nprobe if base_arch(args.arch) != "standard" else None)
             retrieved_ids = [json.loads(r)["course_id"] for r in res_tuple]
-            recall = compute_recall(gt["ground_truth_ids"], retrieved_ids)
+            recall = compute_recall(retrieved_ids, gt["ground_truth_ids"])
             baseline_recalls.append(recall)
             baseline_latencies.append(latency)
             baseline_hops.append(hops)
@@ -357,7 +328,7 @@ def run_fault_tolerance(args, subset_courses, ground_truth):
             try:
                 (res_tuple, hops), latency = run_dht_query(active_client, c_json, args.nprobe if base_arch(args.arch) != "standard" else None)
                 retrieved_ids = [json.loads(r)["course_id"] for r in res_tuple]
-                recalls.append(compute_recall(gt["ground_truth_ids"], retrieved_ids))
+                recalls.append(compute_recall(retrieved_ids, gt["ground_truth_ids"]))
                 latencies.append(latency)
                 hops_list.append(hops)
             except Exception:
@@ -442,7 +413,7 @@ def run_node_join(args, subset_courses, ground_truth):
         try:
             (res_tuple, hops), latency = run_dht_query(existing_node, c_json, args.nprobe if base_arch(args.arch) != "standard" else None)
             retrieved_ids = [json.loads(r)["course_id"] for r in res_tuple]
-            recall = compute_recall(gt["ground_truth_ids"], retrieved_ids)
+            recall = compute_recall(retrieved_ids, gt["ground_truth_ids"])
             pre_recalls.append(recall)
             pre_latencies.append(latency)
             pre_hops.append(hops)
@@ -485,7 +456,7 @@ def run_node_join(args, subset_courses, ground_truth):
         try:
             (res_tuple, hops), latency = run_dht_query(new_node, c_json, args.nprobe if base_arch(args.arch) != "standard" else None)
             retrieved_ids = [json.loads(r)["course_id"] for r in res_tuple]
-            recall = compute_recall(gt["ground_truth_ids"], retrieved_ids)
+            recall = compute_recall(retrieved_ids, gt["ground_truth_ids"])
             post_recalls.append(recall)
             post_latencies.append(latency)
             post_hops.append(hops)
@@ -523,73 +494,6 @@ def run_node_join(args, subset_courses, ground_truth):
     with open(out_path, "w") as f:
         json.dump(join_results, f, indent=4)
     print(f"Node join results saved to {out_path}")
-
-def run_load_balancing(args, subset_courses, ground_truth):
-    arch_label = arch_label_for(args.arch)
-    print(f"\n=== Running {arch_label} Concurrency Benchmark ===")
-    
-    node_addresses = get_node_addresses(args.arch)
-    query_node_addr = node_addresses[0]
-
-    concurrency_workloads = [1, 2, 4, 8, 16]
-    load_results = {
-        "concurrency_levels": concurrency_workloads,
-        "with_load_balancing": [],
-        "without_load_balancing": []
-    }
-
-    # Active replica delegation is a Semantic Router feature; the baselines have
-    # no equivalent, so this experiment is meaningful only for the semantic arch
-    # (and its async_semantic variant, which shares the same delegation logic
-    # over a different RPC transport).
-    if args.arch not in ("semantic", "async_semantic"):
-        print(f"Skipping load-balancing benchmark for '{args.arch}': "
-              f"no active replica delegation in this architecture.")
-        return
-
-    # Inject data (fresh ring per experiment): without data the hotspot node has
-    # nothing to serve and we would only measure empty-query overhead.
-    bulk_inject(args, node_addresses, subset_courses)
-    print("Waiting 15s for full ring stabilization and finger table propagation...")
-    time.sleep(15)
-
-    # A single fixed course is queried repeatedly to concentrate all load on one
-    # owner node (a hotspot), which is what triggers replica delegation.
-    hotspot = random.choice(subset_courses)
-    print(f"Hotspot course: '{hotspot.get('course_title', '?')[:60]}'")
-
-    # Set on EVERY node, not just the entry point: bulk_inject just disabled
-    # delegation ring-wide, and whichever node actually owns the hotspot
-    # cluster (not necessarily node_addresses[0]) is the one whose threshold
-    # governs the delegation decision.
-    print("Testing CONCURRENT queries WITH active load balancing (threshold=3)...")
-    for addr in node_addresses:
-        try:
-            rpc_client(addr).set_load_threshold(3)
-        except Exception:
-            pass
-    for batch_size in concurrency_workloads:
-        avg_latency = run_concurrent_batch(query_node_addr, batch_size, subset_courses,
-                                           args.nprobe, hotspot_course=hotspot)
-        load_results["with_load_balancing"].append(avg_latency)
-        time.sleep(1)
-
-    print("Testing CONCURRENT queries WITHOUT active load balancing (threshold=999)...")
-    for addr in node_addresses:
-        try:
-            rpc_client(addr).set_load_threshold(999)  # effectively never delegates
-        except Exception:
-            pass
-    for batch_size in concurrency_workloads:
-        avg_latency = run_concurrent_batch(query_node_addr, batch_size, subset_courses,
-                                           args.nprobe, hotspot_course=hotspot)
-        load_results["without_load_balancing"].append(avg_latency)
-        time.sleep(1)
-            
-    out_path = os.path.join(project_root(), "data", "benchmarks", "results", "containerized", f"load_balancing_results_{args.arch}.json")
-    with open(out_path, "w") as f:
-        json.dump(load_results, f, indent=4)
-    print(f"Load balancing results saved to {out_path}")
 
 def project_root():
     return os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -716,7 +620,7 @@ def run_disaster_scenario(args, subset_courses, ground_truth):
         try:
             (res_tuple, _), _ = run_dht_query(client, c_json, 5) # High nprobe=5
             retrieved_ids = [json.loads(r)["course_id"] for r in res_tuple]
-            recall = compute_recall(gt["ground_truth_ids"], retrieved_ids)
+            recall = compute_recall(retrieved_ids, gt["ground_truth_ids"])
             baseline_recalls.append(recall)
         except Exception:
             pass
@@ -770,7 +674,7 @@ def run_disaster_scenario(args, subset_courses, ground_truth):
         try:
             (res_tuple, _), _ = run_dht_query(surviving_client, c_json, 5) # High nprobe=5
             retrieved_ids = [json.loads(r)["course_id"] for r in res_tuple]
-            recall = compute_recall(gt["ground_truth_ids"], retrieved_ids)
+            recall = compute_recall(retrieved_ids, gt["ground_truth_ids"])
             disaster_recalls.append(recall)
         except Exception:
             disaster_recalls.append(0.0)
@@ -812,8 +716,7 @@ def run_vnode_disaster_scenario(args, subset_courses, ground_truth):
     node/vnode owns a much smaller slice of the corpus, so killing RF+1
     adjacent nodes destroys a much smaller fraction of the ring than at N=5.
 
-    Unlike run_hops_sweep (which deliberately sets RF=0 to isolate pure
-    routing/hop behavior), this KEEPS replication enabled (config.vnodes.yaml
+    Like every other experiment, this KEEPS replication enabled (config.vnodes.yaml
     default RF=2) since the whole mechanic depends on replicas existing to be
     wiped out."""
     if base_arch(args.arch) == "standard":
@@ -831,8 +734,7 @@ def run_vnode_disaster_scenario(args, subset_courses, ground_truth):
 
     client = rpc_client(node_addresses[0])
 
-    # 1. Inject data (replication stays at config default RF=2 -- no override,
-    #    unlike run_hops_sweep's RF=0).
+    # 1. Inject data (replication stays at config default RF=2 -- no override).
     bulk_inject(args, node_addresses, subset_courses)
     print("Waiting for finger tables to settle before measuring...")
     wait_for_finger_stability(node_addresses, timeout=args.converge_timeout)
@@ -901,24 +803,43 @@ def run_vnode_disaster_scenario(args, subset_courses, ground_truth):
     def measure(rpc, label):
         recalls_by_nprobe = []      # mean recall per nprobe
         perq_by_nprobe = []         # per-query recall lists, aligned to ground_truth order
+        # Routing hops come back from every query anyway; capturing them here lets
+        # one disaster run over a ladder of N answer BOTH open questions on the
+        # same rings and the same queries: whether the resilience gap narrows as
+        # K/N -> 1, and whether routing cost tracks O(log N + nprobe) against
+        # O(nprobe * log N) as N grows. Baseline-vs-disaster hops also show
+        # whether a kill inflates routing cost, not just recall.
+        hops_by_nprobe = []         # mean hops per nprobe, over COMPLETED queries
+        completed_by_nprobe = []    # denominator for the hops mean (see below)
         for npb in nprobe_values:
-            recalls = []
+            recalls, hops_list = [], []
             for gt in ground_truth:
                 c_json = json.dumps(gt["course"])
                 try:
-                    (res_tuple, _), _ = run_dht_query(rpc, c_json, npb)
+                    (res_tuple, hops), _ = run_dht_query(rpc, c_json, npb)
                     retrieved_ids = [json.loads(r)["course_id"] for r in res_tuple]
-                    recalls.append(compute_recall(gt["ground_truth_ids"], retrieved_ids))
+                    recalls.append(compute_recall(retrieved_ids, gt["ground_truth_ids"]))
+                    hops_list.append(hops)
                 except Exception:
+                    # A failed query IS zero recall under disaster, so it counts
+                    # in the recall mean. It has no meaningful hop count though,
+                    # so it is excluded from the hops mean -- hence the separate
+                    # completed_by_nprobe denominator, which keeps that exclusion
+                    # visible instead of silently shrinking the divisor.
                     recalls.append(0.0)
             mean_r = sum(recalls) / len(recalls) if recalls else 0.0
+            mean_h = sum(hops_list) / len(hops_list) if hops_list else 0.0
             recalls_by_nprobe.append(mean_r)
             perq_by_nprobe.append(recalls)
-            print(f"  [{label}] nprobe={npb:2d} -> recall {mean_r*100:5.1f}%")
-        return recalls_by_nprobe, perq_by_nprobe
+            hops_by_nprobe.append(mean_h)
+            completed_by_nprobe.append(len(hops_list))
+            flag = "" if len(hops_list) == len(ground_truth) else "  !! PARTIAL"
+            print(f"  [{label}] nprobe={npb:2d} -> recall {mean_r*100:5.1f}% | "
+                  f"hops {mean_h:6.2f} | n={len(hops_list)}/{len(ground_truth)}{flag}")
+        return recalls_by_nprobe, perq_by_nprobe, hops_by_nprobe, completed_by_nprobe
 
     print("Running Baseline Queries (nprobe sweep)...")
-    baseline_recalls, baseline_perq = measure(client, "baseline")
+    baseline_recalls, baseline_perq, baseline_hops, baseline_done = measure(client, "baseline")
     # Headline granularity: nprobe=5 (matches the 5-node disaster result) if in
     # the sweep, else the largest nprobe; full curve is in the *_by_nprobe lists.
     headline_idx = nprobe_values.index(5) if 5 in nprobe_values else len(nprobe_values) - 1
@@ -970,7 +891,7 @@ def run_vnode_disaster_scenario(args, subset_courses, ground_truth):
     wait_for_finger_stability(surviving_nodes, timeout=args.converge_timeout)
 
     print("Executing queries under disaster conditions (nprobe sweep)...")
-    disaster_recalls, disaster_perq = measure(surviving_client, "disaster")
+    disaster_recalls, disaster_perq, disaster_hops, disaster_done = measure(surviving_client, "disaster")
     mean_disaster = disaster_recalls[headline_idx] if disaster_recalls else 0.0
     print(f"Disaster Mean Recall ({len(to_kill)} correlated kills), by nprobe:")
     for npb, br, dr in zip(nprobe_values, baseline_recalls, disaster_recalls):
@@ -1057,6 +978,10 @@ def run_vnode_disaster_scenario(args, subset_courses, ground_truth):
         "headline_nprobe": head_np,
         "baseline_recall_by_nprobe": baseline_recalls,
         "disaster_recall_by_nprobe": disaster_recalls,
+        "baseline_hops_by_nprobe": baseline_hops,
+        "disaster_hops_by_nprobe": disaster_hops,
+        "baseline_completed_by_nprobe": baseline_done,
+        "disaster_completed_by_nprobe": disaster_done,
         "baseline_recall": mean_baseline,
         "disaster_recall": mean_disaster,
         "correlated_kills": len(to_kill),
@@ -1195,17 +1120,8 @@ def bulk_inject(args, node_addresses, courses):
     """Fast bulk-load replacement for inject_data_simple: resolves owners
     client-side and ships data via batched store_bulk RPCs instead of routing
     len(courses) sequential put_course calls one at a time. Used as the shared
-    data-loading step for every experiment mode (scale/fault/join/load/disaster/
-    characterize) across all six architectures.
-
-    Also resets the active-replica-delegation threshold to effectively-disabled
-    (10**9) on every node -- query_load only increments on a LOCAL serve and
-    never on a delegated one, so once it reaches LOAD_THRESHOLD under any
-    sustained query rate (not just genuine concurrent overload; the periodic
-    -1/second decay can't outpace even sequential queries faster than 1/sec)
-    it stays pinned there, silently adding a delegation hop's latency to every
-    later query. run_load_balancing is the only mode that wants this mechanism
-    active, and it already sets its own threshold explicitly before measuring."""
+    data-loading step for every experiment mode (scale/fault/join/disaster/
+    characterize) across all six architectures."""
     print(f"Bulk-loading {len(courses)} courses into {args.arch} cluster via {node_addresses[0]}...")
     if base_arch(args.arch) == "standard":
         if args.arch.startswith("async_"):
@@ -1218,12 +1134,6 @@ def bulk_inject(args, node_addresses, courses):
         HashNode = dummy_node_class(args.arch)
         dummy_node = HashNode("127.0.0.1", 5000)
         bulk_load_direct(node_addresses, courses, dummy_node)
-
-    for addr in node_addresses:
-        try:
-            rpc_client(addr).set_load_threshold(10 ** 9)
-        except Exception:
-            pass
 
 
 def _forms_single_cycle(addresses, succ):
@@ -1335,18 +1245,8 @@ def run_hops_sweep(args, subset_courses, ground_truth):
     if not wait_for_ring_convergence(addresses, timeout=args.converge_timeout):
         return
 
-    # RF=0: pure GET-routing experiment, no replica placement needed.
-    # ALSO disable load-balancing delegation: with RF=0 there is no replica, so an
-    # "overloaded" node (load_threshold=3) would delegate reads to an EMPTY successor
-    # and return nothing -- which corrupts recall (worse at higher nprobe). Raise the
-    # threshold so every node always serves its own data.
-    for a in addresses:
-        try:
-            proxy = rpc_client(a)
-            proxy.set_replication_factor(0)
-            proxy.set_load_threshold(10 ** 9)
-        except Exception:
-            pass
+    # RF is inherited from the config (RF=2), matching the 5-node scaling run and
+    # the thesis, so the two experiments form a controlled RF=2 pair.
 
     # Direct bulk-load (only needed for the recall sanity line; hops are measured
     # regardless of stored data).
@@ -1373,25 +1273,40 @@ def run_hops_sweep(args, subset_courses, ground_truth):
     k = dummy_node.k if dummy_node is not None else 1
     nprobe_values = [n for n in [1, 2, 3, 5, 8, 12, 20, 40] if n <= max(1, k)] if use_nprobe else [1]
 
+    # Completion bookkeeping: the means below are over queries that RETURNED, so
+    # a query that raises (e.g. the clustered fanout timing out at high nprobe,
+    # where every scattered cluster costs its own Chord lookup) shrinks the
+    # DENOMINATOR instead of moving the mean. Without this, a mean over a
+    # surviving subset is indistinguishable from a mean over the full query set,
+    # and the reported figure becomes survivorship-biased. attempted/completed
+    # are persisted so the denominator is auditable from the artifact alone.
     results = {"arch": args.arch, "num_nodes": len(addresses),
-               "nprobe_values": [], "hops": [], "recall": []}
+               "nprobe_values": [], "hops": [], "recall": [],
+               "attempted": [], "completed": [], "errors": []}
     for npb in nprobe_values:
         hops_list, recalls = [], []
+        err_counts = {}
         for gt in ground_truth:
             c_json = json.dumps(gt["course"])
             try:
                 (res_tuple, hops), _ = run_dht_query(client, c_json, npb if use_nprobe else None)
                 retrieved = [json.loads(r)["course_id"] for r in res_tuple]
                 hops_list.append(hops)
-                recalls.append(compute_recall(gt["ground_truth_ids"], retrieved))
-            except Exception:
-                pass
+                recalls.append(compute_recall(retrieved, gt["ground_truth_ids"]))
+            except Exception as e:
+                name = type(e).__name__
+                err_counts[name] = err_counts.get(name, 0) + 1
         mean_h = sum(hops_list) / len(hops_list) if hops_list else 0.0
         mean_r = sum(recalls) / len(recalls) if recalls else 0.0
         results["nprobe_values"].append(npb)
         results["hops"].append(mean_h)
         results["recall"].append(mean_r)
-        print(f"  nprobe={npb:2d} -> hops {mean_h:6.2f} | recall {mean_r*100:5.1f}%")
+        results["attempted"].append(len(ground_truth))
+        results["completed"].append(len(hops_list))
+        results["errors"].append(err_counts)
+        flag = "" if len(hops_list) == len(ground_truth) else f"  !! PARTIAL {err_counts}"
+        print(f"  nprobe={npb:2d} -> hops {mean_h:6.2f} | recall {mean_r*100:5.1f}%"
+              f" | n={len(hops_list)}/{len(ground_truth)}{flag}")
 
     out_path = os.path.join(project_root(), "data", "benchmarks", "results",
                             "containerized", f"hops_sweep_results_{args.arch}.json")
@@ -1405,7 +1320,7 @@ def main():
     parser.add_argument("--arch", type=str, default="semantic",
                         choices=["standard", "clustered", "semantic",
                                  "async_standard", "async_clustered", "async_semantic"])
-    parser.add_argument("--mode", type=str, default="all", choices=["scale", "fault", "join", "load", "disaster", "characterize", "hops", "vnode_disaster", "doomed", "all"])
+    parser.add_argument("--mode", type=str, default="all", choices=["scale", "fault", "join", "disaster", "characterize", "hops", "vnode_disaster", "doomed", "all"])
     parser.add_argument("--dataset", type=str, default="kaggle")
     parser.add_argument("--num_nodes", type=int, default=5)
     parser.add_argument("--queries", type=int, default=50)
@@ -1462,8 +1377,6 @@ def main():
         run_fault_tolerance(args, subset_courses, ground_truth)
     if args.mode == "join" or args.mode == "all":
         run_node_join(args, subset_courses, ground_truth)
-    if args.mode == "load" or args.mode == "all":
-        run_load_balancing(args, subset_courses, ground_truth)
     if args.mode == "disaster" or args.mode == "all":
         run_disaster_scenario(args, subset_courses, ground_truth)
     if args.mode == "characterize" or args.mode == "all":
