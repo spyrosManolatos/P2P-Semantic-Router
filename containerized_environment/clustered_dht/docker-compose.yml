@@ -1,0 +1,107 @@
+services:
+  clustered-bootstrap:
+    build:
+      context: ../..
+      dockerfile: containerized_environment/Dockerfile
+    image: p2p-semantic-router:latest
+    container_name: clustered-bootstrap
+    command: ["--arch", "clustered", "--ip", "clustered-bootstrap", "--port", "5000"]
+    ports:
+      - "8201:5000"
+    volumes:
+      - ../../data:/app/data
+      - ../../src:/app/src
+
+  clustered-node-1:
+    image: p2p-semantic-router:latest
+    container_name: clustered-node-1
+    command: ["--arch", "clustered", "--ip", "clustered-node-1", "--port", "5000", "--bootstrap", "clustered-bootstrap:5000"]
+    depends_on:
+      - clustered-bootstrap
+    ports:
+      - "8202:5000"
+    volumes:
+      - ../../data:/app/data
+      - ../../src:/app/src
+
+  clustered-node-2:
+    image: p2p-semantic-router:latest
+    container_name: clustered-node-2
+    command: ["--arch", "clustered", "--ip", "clustered-node-2", "--port", "5000", "--bootstrap", "clustered-bootstrap:5000"]
+    depends_on:
+      - clustered-bootstrap
+    ports:
+      - "8203:5000"
+    volumes:
+      - ../../data:/app/data
+      - ../../src:/app/src
+
+  clustered-node-3:
+    image: p2p-semantic-router:latest
+    container_name: clustered-node-3
+    command: ["--arch", "clustered", "--ip", "clustered-node-3", "--port", "5000", "--bootstrap", "clustered-bootstrap:5000"]
+    depends_on:
+      - clustered-bootstrap
+    ports:
+      - "8204:5000"
+    volumes:
+      - ../../data:/app/data
+      - ../../src:/app/src
+
+  clustered-node-4:
+    image: p2p-semantic-router:latest
+    container_name: clustered-node-4
+    command: ["--arch", "clustered", "--ip", "clustered-node-4", "--port", "5000", "--bootstrap", "clustered-bootstrap:5000"]
+    depends_on:
+      - clustered-bootstrap
+    ports:
+      - "8205:5000"
+    volumes:
+      - ../../data:/app/data
+      - ../../src:/app/src
+
+  clustered-node-5:
+    image: p2p-semantic-router:latest
+    container_name: clustered-node-5
+    command: ["--arch", "clustered", "--ip", "clustered-node-5", "--port", "5000"]
+    ports:
+      - "8206:5000"
+    volumes:
+      - ../../data:/app/data
+      - ../../src:/app/src
+
+  clustered-gateway:
+    image: p2p-semantic-router:latest
+    container_name: clustered-gateway
+    entrypoint: ["uvicorn", "api.main:app", "--app-dir", "src", "--host", "0.0.0.0", "--port", "8080"]
+    environment:
+      - DHT_NODES=clustered-bootstrap:5000,clustered-node-1:5000,clustered-node-2:5000,clustered-node-3:5000,clustered-node-4:5000
+      - GATEWAY_TITLE=P2P Clustered DHT
+    depends_on:
+      - clustered-bootstrap
+      - clustered-node-1
+      - clustered-node-2
+      - clustered-node-3
+      - clustered-node-4
+    ports:
+      - "8081:8080"
+    volumes:
+      - ../../data:/app/data
+      - ../../src:/app/src
+
+  clustered-runner:
+    image: p2p-semantic-router:latest
+    container_name: clustered-runner
+    profiles:
+      - runner
+    depends_on:
+      - clustered-bootstrap
+      - clustered-node-1
+      - clustered-node-2
+      - clustered-node-3
+      - clustered-node-4
+      - clustered-node-5
+    volumes:
+      - ../../data:/app/data
+      - ../../src:/app/src
+    entrypoint: ["python", "-m", "src.benchmarks.containerized.evaluate", "--arch", "clustered", "--mode", "all", "--num_nodes", "5"]

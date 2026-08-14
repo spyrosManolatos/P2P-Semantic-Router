@@ -1,0 +1,6 @@
+# Everything for the DHT deployment lives in its own namespace: one delete
+# cleans up the whole experiment (kubectl delete namespace dht).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dht

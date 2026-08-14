@@ -1,0 +1,137 @@
+networks:
+  ring_net:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+services:
+  async-bootstrap-node:
+    build:
+      context: ../..
+      dockerfile: containerized_environment/Dockerfile
+    image: p2p-semantic-router:latest
+    container_name: async-bootstrap-node
+    command: ["--arch", "async_semantic", "--ip", "async-bootstrap-node", "--port", "5000"]
+    networks:
+      ring_net:
+        ipv4_address: 172.30.0.10
+    ports:
+      - "8011:5000"
+    volumes:
+      - ../../data:/app/data
+      - ../../src:/app/src
+
+  async-node-1:
+    image: p2p-semantic-router:latest
+    container_name: async-node-1
+    command: ["--arch", "async_semantic", "--ip", "async-node-1", "--port", "5000", "--bootstrap", "async-bootstrap-node:5000"]
+    depends_on:
+      - async-bootstrap-node
+    networks:
+      ring_net:
+        ipv4_address: 172.30.0.11
+    ports:
+      - "8012:5000"
+    volumes:
+      - ../../data:/app/data
+      - ../../src:/app/src
+
+  async-node-2:
+    image: p2p-semantic-router:latest
+    container_name: async-node-2
+    command: ["--arch", "async_semantic", "--ip", "async-node-2", "--port", "5000", "--bootstrap", "async-bootstrap-node:5000"]
+    depends_on:
+      - async-bootstrap-node
+    networks:
+      ring_net:
+        ipv4_address: 172.30.0.12
+    ports:
+      - "8013:5000"
+    volumes:
+      - ../../data:/app/data
+      - ../../src:/app/src
+
+  async-node-3:
+    image: p2p-semantic-router:latest
+    container_name: async-node-3
+    command: ["--arch", "async_semantic", "--ip", "async-node-3", "--port", "5000", "--bootstrap", "async-bootstrap-node:5000"]
+    depends_on:
+      - async-bootstrap-node
+    networks:
+      ring_net:
+        ipv4_address: 172.30.0.13
+    ports:
+      - "8014:5000"
+    volumes:
+      - ../../data:/app/data
+      - ../../src:/app/src
+
+  async-node-4:
+    image: p2p-semantic-router:latest
+    container_name: async-node-4
+    command: ["--arch", "async_semantic", "--ip", "async-node-4", "--port", "5000", "--bootstrap", "async-bootstrap-node:5000"]
+    depends_on:
+      - async-bootstrap-node
+    networks:
+      ring_net:
+        ipv4_address: 172.30.0.14
+    ports:
+      - "8015:5000"
+    volumes:
+      - ../../data:/app/data
+      - ../../src:/app/src
+
+  async-node-5:
+    image: p2p-semantic-router:latest
+    container_name: async-node-5
+    command: ["--arch", "async_semantic", "--ip", "async-node-5", "--port", "5000"]
+    networks:
+      ring_net:
+        ipv4_address: 172.30.0.15
+    ports:
+      - "8016:5000"
+    volumes:
+      - ../../data:/app/data
+      - ../../src:/app/src
+
+  async-gateway:
+    image: p2p-semantic-router:latest
+    container_name: async-gateway
+    entrypoint: ["uvicorn", "api.main:app", "--app-dir", "src", "--host", "0.0.0.0", "--port", "8080"]
+    environment:
+      - TRANSPORT=json
+      - DHT_NODES=async-bootstrap-node:5000,async-node-1:5000,async-node-2:5000,async-node-3:5000,async-node-4:5000
+      - GATEWAY_TITLE=P2P Semantic Router (async)
+    depends_on:
+      - async-bootstrap-node
+      - async-node-1
+      - async-node-2
+      - async-node-3
+      - async-node-4
+    networks:
+      ring_net:
+        ipv4_address: 172.30.0.20
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../../data:/app/data
+      - ../../src:/app/src
+
+  async-semantic-runner:
+    image: p2p-semantic-router:latest
+    container_name: async-semantic-runner
+    profiles:
+      - runner
+    depends_on:
+      - async-bootstrap-node
+      - async-node-1
+      - async-node-2
+      - async-node-3
+      - async-node-4
+      - async-node-5
+    networks:
+      - ring_net
+    volumes:
+      - ../../data:/app/data
+      - ../../src:/app/src
+    entrypoint: ["python", "-m", "src.benchmarks.containerized.evaluate", "--arch", "async_semantic", "--mode", "all", "--num_nodes", "5"]

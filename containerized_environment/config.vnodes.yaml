@@ -1,0 +1,30 @@
+# Config for the VIRTUAL-NODE full-corpus scaling experiment (mode=hops).
+# Identical to config.prod.yaml EXCEPT the kaggle centroids artifact points to
+# the fine-grained k=4096 model trained on the full 98k corpus, so this ring
+# runs at IVF granularity without touching the production K=80 artifact or any
+# existing result. Selected via CONFIG_PATH in docker-compose.vnodes.yml.
+#
+# RF is still overridden AT RUNTIME by the benchmark
+# (set_replication_factor(0)), as in the pilot.
+
+network:
+  default_host: "bootstrap-node"
+  default_port: 5000
+  timeout_sec: 3.0
+  number_of_nodes: 5
+
+dht:
+  hash_bits_m: 160
+  replication_factor: 2
+  stabilize_interval_sec: 1.0
+
+storage:
+  centroids:
+    synthetic_path: "data/models/synthetic_centroids.json"
+    kaggle_dataset_path: "data/models/kaggle_centroids_k5500.json"
+  data:
+    synthetic_path: "data/raw/synthetic_data.json"
+    kaggle:
+      raw_path: "data/raw/udemy_courses.csv"
+      normalized_path: "data/raw/normalized_kaggle_courses.json"
+  num_courses: 500

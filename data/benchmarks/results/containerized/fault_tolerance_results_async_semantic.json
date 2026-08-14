@@ -1,0 +1,26 @@
+{
+    "baseline": {
+        "recall": 0.682,
+        "hops": 1.0,
+        "latency": 282.22205115993347,
+        "heal_time_sec": 0.0
+    },
+    "after_failure_transient": {
+        "recall": 0.682,
+        "latency": 622.2590449000381,
+        "hops": 0.96,
+        "heal_time_sec": 1.018333911895752
+    },
+    "after_failure_healed": {
+        "recall": 0.682,
+        "latency": 328.37434318000305,
+        "hops": 0.9
+    },
+    "after_failure": {
+        "recall": 0.682,
+        "latency": 622.2590449000381,
+        "hops": 0.96,
+        "heal_time_sec": 1.018333911895752
+    },
+    "nprobe": 2
+}

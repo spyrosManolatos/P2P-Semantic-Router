@@ -1,0 +1,15 @@
+{
+    "nprobe": 2,
+    "original_5_nodes": {
+        "recall": 0.682,
+        "hops": 1.0,
+        "latency": 343.253049640025
+    },
+    "expanded_6_nodes": {
+        "recall": 0.682,
+        "hops": 1.08,
+        "latency": 377.4277140399863,
+        "migrated_primary_courses": 2915
+    },
+    "stabilization_window_sec": 10.0
+}

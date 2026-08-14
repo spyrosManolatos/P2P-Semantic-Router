@@ -1,0 +1,22 @@
+services:
+  async-standard-bootstrap:
+    environment:
+      - CONFIG_PATH=/app/containerized_environment/config.vnodes.yaml
+  async-standard-node-1:
+    environment:
+      - CONFIG_PATH=/app/containerized_environment/config.vnodes.yaml
+  async-standard-node-2:
+    environment:
+      - CONFIG_PATH=/app/containerized_environment/config.vnodes.yaml
+  async-standard-node-3:
+    environment:
+      - CONFIG_PATH=/app/containerized_environment/config.vnodes.yaml
+  async-standard-node-4:
+    environment:
+      - CONFIG_PATH=/app/containerized_environment/config.vnodes.yaml
+  async-standard-node-5:
+    environment:
+      - CONFIG_PATH=/app/containerized_environment/config.vnodes.yaml
+  async-standard-runner:
+    environment:
+      - CONFIG_PATH=/app/containerized_environment/config.vnodes.yaml

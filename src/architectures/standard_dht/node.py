@@ -42,15 +42,22 @@ class NaiveChordNode:
         self.finger_table = [None] * self.m
         
         self.storage = {} # course_hash_str -> [course_json_with_vec]
+        # Tracks whether primary storage changed since the last replica sync,
+        # so the periodic tick can skip re-marshalling/re-sending the whole
+        # primary set when nothing changed (see sync_replicas_to_successors).
+        self._replica_sync_dirty = False
         
         if self.dataset == "synthetic":
             centroids_path = config['storage']['centroids']['synthetic_path']
         else:
             centroids_path = config['storage']['centroids']['kaggle_dataset_path']
         self.vocab = self._load_vocab(centroids_path)
-        self.query_load = 0
-        
-        self.server = ThreadedXMLRPCServer((ip, port), allow_none=True, logRequests=False)
+
+        # Bind to 0.0.0.0 for external access in containerized environments (unless localhost/127.0.0.1)
+        bind_ip = ip
+        if ip not in ["127.0.0.1", "localhost"]:
+            bind_ip = "0.0.0.0"
+        self.server = ThreadedXMLRPCServer((bind_ip, port), allow_none=True, logRequests=False)
         self.server.register_instance(self)
         
         self.running = True
@@ -64,9 +71,16 @@ class NaiveChordNode:
         self.t_stab.start()
         
     def _load_vocab(self, path):
-        if not os.path.exists(path): return {}
+        if not os.path.exists(path):
+            raise FileNotFoundError(
+                f"Centroid artifact missing: {path}. "
+                f"Run 'python3 src/ml/train_centroids.py' first."
+            )
         with open(path, 'r', encoding='utf-8') as f:
-            return json.load(f).get('vocabulary', {})
+            vocab = json.load(f).get('vocabulary', {})
+        if not vocab:
+            raise ValueError(f"Corrupt centroid artifact {path}: empty vocabulary.")
+        return vocab
             
     def _vectorize(self, text: str) -> List[float]:
         words = text.lower().split()
@@ -93,6 +107,13 @@ class NaiveChordNode:
     def get_hash(self, addr: str) -> int:
         if not addr: return 0
         return int(hashlib.sha1(addr.encode('utf-8')).hexdigest(), 16) % (2**self.m)
+
+    def get_addr_hash(self, addr: str) -> int:
+        """Alias for get_hash -- sync nodes hash their hostname directly (no
+        transport-prefix stripping needed); kept for interface parity with
+        the async_* node classes, which use a real-IP-based get_addr_hash so
+        evaluate.py's bulk_load_direct() can call either uniformly."""
+        return self.get_hash(addr)
 
     def _get_rpc_client(self, addr: str) -> xmlrpc.client.ServerProxy:
         return xmlrpc.client.ServerProxy(f"http://{addr}", allow_none=True)
@@ -150,7 +171,7 @@ class NaiveChordNode:
                 self.predecessor = potential_predecessor
                 predecessor_changed = True
         if predecessor_changed:
-            self.sync_replicas_to_successors()
+            self.sync_replicas_to_successors(force=True)
 
     def store_replica(self, key_id_str: str, value: str) -> bool:
         k_str = str(key_id_str)
@@ -161,6 +182,7 @@ class NaiveChordNode:
             self.storage[k_str] = [c for c in self.storage[k_str] if json.loads(c).get("course_id") != new_id]
         except: pass
         self.storage[k_str].append(value)
+        self._replica_sync_dirty = True
         return True
 
     def store_local(self, key_id_str: str, value: str) -> bool:
@@ -173,20 +195,51 @@ class NaiveChordNode:
             except: pass
         return success
 
-    def sync_replicas_to_successors(self):
+    def store_bulk(self, items: List[Any]) -> int:
+        """Batched replica/bulk-load storage: items is a list of [key_str, course_json].
+        Mirrors clustered_dht/semantic_router's store_bulk so sync_replicas_to_successors
+        and offline bulk loading can send one RPC instead of one per course."""
+        n = 0
+        for k_str, cjson in items:
+            if self.store_replica(str(k_str), cjson):
+                n += 1
+        return n
+
+    def sync_replicas_to_successors(self, force: bool = False):
+        """Pushes all primary data from this node to its successor list as replicas.
+        Batched into one store_bulk RPC per successor per round instead of one
+        store_replica RPC per course -- at real corpus scale (tens of thousands
+        of courses per node) the unbatched form re-sent every stabilize_interval_sec
+        would mean tens of thousands of RPC round-trips per second per node.
+
+        Still O(primary set size) per call, so the routine periodic tick only
+        runs it when primary data actually changed since the last sync
+        (self._replica_sync_dirty). stabilize() passes force=True whenever the
+        successor list changed this round, since a new successor may not have
+        any data yet regardless of whether this node's own primary set changed."""
+        if not force and not self._replica_sync_dirty:
+            return
         if self.rf <= 0 or self.successor == self.address: return
         pred_addr = self.predecessor if self.predecessor else self.address
         pred_id = self.get_hash(pred_addr)
+        items = []
+        for k_str, courses in list(self.storage.items()):
+            key_id = int(k_str)
+            if in_half_open_range(key_id, pred_id, self.node_id):
+                for course_str in courses:
+                    items.append([k_str, course_str])
+        if not items:
+            self._replica_sync_dirty = False
+            return
+        had_failure = False
         for succ in self.successors[:self.rf]:
             if succ == self.address: continue
             try:
                 with self._get_rpc_client(succ) as succ_client:
-                    for k_str, courses in list(self.storage.items()):
-                        key_id = int(k_str)
-                        if in_half_open_range(key_id, pred_id, self.node_id):
-                            for course_str in courses:
-                                succ_client.store_replica(k_str, course_str)
-            except: pass
+                    succ_client.store_bulk(items)
+            except:
+                had_failure = True
+        self._replica_sync_dirty = had_failure
 
     def claim_and_migrate_data(self, new_node_id_str: str, new_node_address: str) -> Dict[str, List[str]]:
         new_node_id = int(new_node_id_str)
@@ -297,7 +350,12 @@ class NaiveChordNode:
             if in_half_open_range(key_id, pred_id, self.node_id) or self.predecessor is None:
                 for c_str in courses:
                     c_data = json.loads(c_str)
-                    sim = self._cosine_similarity(query_vec, c_data["vector"])
+                    if "vector" in c_data:
+                        c_vec = c_data["vector"]
+                    else:
+                        text = f"{c_data['course_title']} {c_data['category']} {c_data['description']}"
+                        c_vec = self._vectorize(text)
+                    sim = self._cosine_similarity(query_vec, c_vec)
                     results.append((sim, c_str))
                 
         results.sort(key=lambda x: x[0], reverse=True)
@@ -382,6 +440,7 @@ class NaiveChordNode:
 
     def stabilize(self):
         if not self.successors: return
+        prev_successors = list(self.successors)
         alive_successors = []
         for succ in self.successors:
             if succ == self.address:
@@ -441,7 +500,7 @@ class NaiveChordNode:
                 except Exception as e:
                     print(f"[{self.address}] Error during stabilization communication with successor {succ}: {e}")
         self.cleanup_stale_replicas()
-        self.sync_replicas_to_successors()
+        self.sync_replicas_to_successors(force=(self.successors != prev_successors))
 
     def cleanup_stale_replicas(self):
         depth = self.rf + 1

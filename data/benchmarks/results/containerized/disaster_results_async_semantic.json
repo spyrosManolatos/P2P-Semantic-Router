@@ -1,0 +1,6 @@
+{
+    "baseline_recall": 0.732,
+    "disaster_recall": 0.132,
+    "correlated_kills": 3,
+    "surviving_nodes": 2
+}

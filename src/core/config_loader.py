@@ -8,10 +8,14 @@ class ConfigLoader:
     @classmethod
     def get_config(cls):
         if cls._config is None:
-            # Locate config.yaml in the project root (one level up from src/)
             current_dir = os.path.dirname(os.path.abspath(__file__))
             project_root = os.path.dirname(os.path.dirname(current_dir))
-            config_path = os.path.join(project_root, "config.yaml")
+            
+            config_path = os.environ.get("CONFIG_PATH")
+            if config_path:
+                config_path = os.path.abspath(config_path)
+            else:
+                config_path = os.path.join(project_root, "config.yaml")
             
             if not os.path.exists(config_path):
                 raise FileNotFoundError(f"Configuration file missing: {config_path}")

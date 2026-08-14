@@ -1,0 +1,48 @@
+# The benchmark harness as a Job: runs to completion once, against the live
+# ring, using the same evaluate.py as every other experiment (mode=hops:
+# convergence gates -> bulk load -> nprobe sweep). Results/plots land inside
+# the Job container (logs carry the numbers); this Job demonstrates the
+# reproducible-evaluation story, it does not replace the Compose results.
+#
+# Run with:   kubectl apply -f k8s/40-benchmark-job.yaml
+# Watch with: kubectl -n dht logs -f job/dht-benchmark
+# Re-run: delete the old Job first (Jobs are immutable):
+#             kubectl -n dht delete job dht-benchmark
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: dht-benchmark
+  namespace: dht
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: dht-benchmark
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: benchmark
+          image: p2p-semantic-router:latest
+          imagePullPolicy: Never
+          command:
+            - python
+            - -m
+            - src.benchmarks.containerized.evaluate
+            - --arch=semantic
+            - --mode=hops
+            - --containers=dht-0.dht,dht-1.dht,dht-2.dht,dht-3.dht,dht-4.dht
+            - --vnodes_per_container=20
+            - --dataset_size=3000
+            - --converge_timeout=900
+          env:
+            - name: CONFIG_PATH
+              value: /app/containerized_environment/config.prod.yaml
+          volumeMounts:
+            - name: config
+              mountPath: /app/containerized_environment/config.prod.yaml
+              subPath: config.prod.yaml
+      volumes:
+        - name: config
+          configMap:
+            name: dht-config

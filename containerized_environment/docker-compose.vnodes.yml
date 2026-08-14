@@ -1,0 +1,79 @@
+# Dedicated compose for the VIRTUAL-NODE scaling (hops) experiment.
+# 5 physical containers x NUM_VNODES virtual nodes each  ->  a large Chord ring
+# on limited hardware (default 5x5 = 25 nodes). Parametrized by ARCH so the same
+# file drives the semantic and clustered runs sequentially.
+#
+# Isolated from the working per-architecture compose files: distinct container
+# names (v-*), its own experiment, nothing shared.
+#
+# Only routing HOPS are meaningful here (all vnodes share one host); latency is not.
+#
+# Usage:
+#   ARCH=semantic  NUM_VNODES=5 docker compose -f docker-compose.vnodes.yml up -d --build
+#   docker compose -f docker-compose.vnodes.yml run --rm runner -m <benchmark> ...
+#   docker compose -f docker-compose.vnodes.yml down --remove-orphans
+#   ARCH=clustered NUM_VNODES=5 docker compose -f docker-compose.vnodes.yml up -d
+#
+# The '--build' is only needed the first time (to bake the image); app_vnodes.py
+# is bind-mounted below, so edits to it need no rebuild.
+
+x-vnode-common: &vnode-common
+  image: p2p-semantic-router:latest
+  build:
+    context: ..
+    dockerfile: containerized_environment/Dockerfile
+  entrypoint: ["python", "containerized_environment/app_vnodes.py"]
+  environment:
+    # Experiment config: identical to prod except the centroids artifact points
+    # to the fine-grained k=4096 model (full-corpus scaling experiment).
+    - CONFIG_PATH=/app/containerized_environment/config.vnodes.yaml
+  volumes:
+    - ../data:/app/data
+    - ../src:/app/src
+    # These files are NOT baked into the image, so mount them directly:
+    - ./app_vnodes.py:/app/containerized_environment/app_vnodes.py
+    - ./config.vnodes.yaml:/app/containerized_environment/config.vnodes.yaml
+
+services:
+  v-bootstrap:
+    <<: *vnode-common
+    container_name: v-bootstrap
+    command: ["--arch", "${ARCH:-semantic}", "--ip", "v-bootstrap", "--port", "5000",
+              "--num_vnodes", "${NUM_VNODES:-5}"]
+
+  v-node-1:
+    <<: *vnode-common
+    container_name: v-node-1
+    depends_on: [v-bootstrap]
+    command: ["--arch", "${ARCH:-semantic}", "--ip", "v-node-1", "--port", "5000",
+              "--num_vnodes", "${NUM_VNODES:-5}", "--bootstrap", "v-bootstrap:5000"]
+
+  v-node-2:
+    <<: *vnode-common
+    container_name: v-node-2
+    depends_on: [v-bootstrap]
+    command: ["--arch", "${ARCH:-semantic}", "--ip", "v-node-2", "--port", "5000",
+              "--num_vnodes", "${NUM_VNODES:-5}", "--bootstrap", "v-bootstrap:5000"]
+
+  v-node-3:
+    <<: *vnode-common
+    container_name: v-node-3
+    depends_on: [v-bootstrap]
+    command: ["--arch", "${ARCH:-semantic}", "--ip", "v-node-3", "--port", "5000",
+              "--num_vnodes", "${NUM_VNODES:-5}", "--bootstrap", "v-bootstrap:5000"]
+
+  v-node-4:
+    <<: *vnode-common
+    container_name: v-node-4
+    depends_on: [v-bootstrap]
+    command: ["--arch", "${ARCH:-semantic}", "--ip", "v-node-4", "--port", "5000",
+              "--num_vnodes", "${NUM_VNODES:-5}", "--bootstrap", "v-bootstrap:5000"]
+
+  # Benchmark driver. Run explicitly:
+  #   docker compose -f docker-compose.vnodes.yml run --rm runner -m src.benchmarks.containerized.evaluate ...
+  runner:
+    <<: *vnode-common
+    container_name: v-runner
+    profiles: [runner]
+    entrypoint: ["python"]
+    depends_on: [v-bootstrap, v-node-1, v-node-2, v-node-3, v-node-4]
