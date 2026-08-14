@@ -1,0 +1,23 @@
+# The image bakes data/ in (see Dockerfile: COPY data/ /app/data/), so anything
+# left here is paid for on every single build. These are the files that are
+# never read inside a container:
+#
+#   udemy_courses.csv  -- consumed only by src/scripts/ingest_kaggle_data.py,
+#                         a HOST-side preprocessing step that produces
+#                         normalized_kaggle_courses.json. 208 MB.
+#   corpus_v0/v1.json  -- training inputs for the blue/green artifacts. Consumed
+#                         by train_centroids_bigk.py, which also runs on the
+#                         host. The trained artifacts themselves (centroids_v*.json)
+#                         ARE needed at runtime and are deliberately NOT excluded.
+#
+# normalized_kaggle_courses.json stays: the in-cluster retrain Job
+# (k8s/50-retrain-job.yaml) trains from it.
+data/raw/udemy_courses.csv
+data/raw/corpus_v0.json
+data/raw/corpus_v1.json
+
+.git
+.venv
+**/__pycache__
+**/*.pyc
+data/benchmarks/plots

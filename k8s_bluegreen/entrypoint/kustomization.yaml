@@ -1,0 +1,9 @@
+# The entry point. Applied once, independently of either ring -- it outlives
+# both, since its whole purpose is to survive rings being created and destroyed
+# underneath it.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - service-externalname.yaml

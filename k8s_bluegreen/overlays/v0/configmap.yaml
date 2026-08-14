@@ -1,0 +1,35 @@
+# v0 ring configuration. The ONLY line that differs from the v1 overlay is
+# kaggle_dataset_path -- that single path is what makes these two rings
+# different systems.
+#
+# centroids_v0.json is trained on the OLD half of the corpus (Development,
+# Business, IT & Software, Finance, Office Productivity). See
+# src/scripts/split_corpus.py.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dht-config
+data:
+  config.prod.yaml: |
+    # P2P Semantic Router - blue/green ring v0
+    network:
+      default_host: "dht-0.dht"
+      default_port: 5000
+      timeout_sec: 3.0
+      number_of_nodes: 3
+
+    dht:
+      hash_bits_m: 160
+      replication_factor: 2
+      stabilize_interval_sec: 1.0
+
+    storage:
+      centroids:
+        synthetic_path: "data/models/synthetic_centroids.json"
+        kaggle_dataset_path: "data/models/centroids_v0.json"   # <-- the ring's artifact
+      data:
+        synthetic_path: "data/raw/synthetic_data.json"
+        kaggle:
+          raw_path: "data/raw/udemy_courses.csv"
+          normalized_path: "data/raw/normalized_kaggle_courses.json"
+      num_courses: 500

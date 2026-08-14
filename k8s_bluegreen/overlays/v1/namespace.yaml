@@ -1,0 +1,8 @@
+# The v0 ring's namespace. The namespace boundary is what makes "dht-0.dht"
+# resolve to a v0 pod here and a v1 pod in dht-v1, from the same string.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dht-v1
+  labels:
+    ring: v1

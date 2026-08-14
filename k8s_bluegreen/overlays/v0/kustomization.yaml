@@ -1,0 +1,40 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Every resource pulled from ../../base lands in this namespace. Because the
+# base names the Service "dht" and the StatefulSet "dht", the v1 overlay
+# produces objects with the SAME names in a different namespace -- which is
+# exactly what makes the pod addresses (and therefore the ring positions)
+# identical across the two rings.
+namespace: dht-v0
+
+resources:
+  - namespace.yaml
+  - ../../base
+  - configmap.yaml
+
+# includeSelectors: false is important -- a StatefulSet's spec.selector is
+# immutable after creation, so the ring label must NOT be folded into it.
+# This is purely for `kubectl get pods -l ring=v0`.
+labels:
+  - pairs:
+      ring: v0
+    includeSelectors: false
+
+patches:
+  - target:
+      kind: StatefulSet
+      name: dht
+    patch: |-
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: dht
+      spec:
+        template:
+          spec:
+            containers:
+              - name: node
+                env:
+                  - name: RING_VERSION
+                    value: "v0"

@@ -1,0 +1,32 @@
+# HEADLESS Service (clusterIP: None) -- per-pod DNS only, no virtual IP.
+#
+# One of these exists PER RING, each in its own namespace, and BOTH are named
+# "dht". That is deliberate, and it is the whole isolation mechanism:
+#
+#   * A Service selector can only ever match pods in its OWN namespace, so the
+#     copy in dht-v0 publishes v0's pod IPs and nothing else. There is no
+#     selector that could accidentally span both rings.
+#
+#   * A pod resolves the short name "dht-0.dht" through its own namespace's
+#     search domain, so the SAME string means a different pod in each ring.
+#     A v0 node asking DNS for dht-0.dht can only be answered with a v0
+#     address. Neither ring can name the other, so no find_successor can cross.
+#
+# publishNotReadyAddresses: true is REQUIRED, not optional (unchanged from the
+# single-ring deployment in k8s/). Readiness gates on finger-table convergence,
+# but vnodes can only converge by first resolving and joining via dht-0.dht.
+# Without the flag the DNS record appears only once a pod is Ready:
+# not Ready -> no DNS -> can't join -> never converges -> never Ready.
+apiVersion: v1
+kind: Service
+metadata:
+  name: dht
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: dht
+  ports:
+    - name: rpc-base
+      port: 5000
+      targetPort: 5000
