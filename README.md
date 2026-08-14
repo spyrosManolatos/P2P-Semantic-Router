@@ -31,7 +31,7 @@ This system is the implementation for the diploma thesis **"Design of a Decentra
 │   │   ├── standard_dht/      # Standard random-hash Chord DHT ring
 │   │   ├── clustered_dht/     # Hashed K-Means clusters DHT ring
 │   │   └── semantic_router/   # Mapped Agglomerative semantic Chord ring (Proposed)
-│   ├── benchmarks/            # Scalability, fault-tolerance, and load-balancing benchmarks
+│   ├── benchmarks/            # Scalability, fault-tolerance, node-join and disaster benchmarks
 │   │   ├── local/             # Local simulation evaluation scripts
 │   │   ├── containerized/     # Containerized cluster evaluation scripts
 │   │   └── metrics.py         # Shared evaluation metrics library
@@ -86,7 +86,7 @@ The system is tested using a real-world dataset of Udemy courses sourced from Ka
 1. **Semantic Centroid Routing:** Nodes automatically vectorize raw text using TF-IDF and route the data to the correct cluster ID on the DHT ring.
 2. **True Vector Embeddings:** Text is vectorized exactly _once_ during insertion (`PUT`), avoiding heavy $O(N)$ text-processing bottlenecks during queries.
 3. **`nprobe` Distributed Fanout:** Similarity queries (`GET`) can seamlessly branch out across multiple mathematical clusters to merge results, allowing a dynamic trade-off between speed and recall. Only the first cluster costs a full $O(\log N)$ Chord lookup; each subsequent probed cluster is reached in $O(1)$ via direct successor/predecessor hops, since semantically adjacent clusters are mapped to ring-adjacent nodes.
-4. **Active Replica Load Balancing:** Solves the notorious "Hot Spot" CPU problem. If a node detects high query load, it mathematically delegates the read queries to its replica node, doubling the read capacity of the network without any data migration!
+4. **Active Replica Delegation (implemented, not validated):** Targets the "Hot Spot" CPU problem — a node under high query load delegates reads to its replica, adding read capacity without data migration. The mechanism is implemented, but it stalls under sustained query rate, so it is **excluded from the benchmark suite** and reported as a design rather than a result (see [`docs/scripts.md`](docs/scripts.md)).
 5. **Self-Healing Fault Tolerance:** Standard Chord stabilization protocols ensure that if a Primary node crashes, the Replica node instantly promotes its backup data to Primary.
 
 ---
@@ -465,7 +465,7 @@ In traditional Machine Learning vector databases, `nprobe` is purely an **accura
 
 ## 🔮 Future Work
 
-With the core architectures, dynamic self-healing, replication data migration, and active replica load-balancing fully benchmarked, future work will focus on scaling the deployment to production-grade distributed environments:
+With the core architectures, dynamic self-healing, and replication data migration fully benchmarked, future work will focus on scaling the deployment to production-grade distributed environments and on keeping the semantic mapping current as the corpus drifts:
 
 1. **Real Network Latency & Multi-Machine Deployment:**
    - Docker and Kubernetes container deployments are already implemented (see the "Kubernetes Deployment" section above and [`k8s/README.md`](k8s/README.md)), but both currently run on a single host, so all reported latency remains relative-only.
@@ -473,7 +473,7 @@ With the core architectures, dynamic self-healing, replication data migration, a
 
 2. **Multi-Core Hardware Isolation (GIL Workload Optimization):**
    - Setting explicit CPU and memory resource constraints (limits/requests) per containerized node.
-   - Measuring concurrent throughput scaling without local Python GIL thread-scheduling bottlenecks to prove true linear throughput scaling of active delegation.
+   - Measuring concurrent throughput scaling without local Python GIL thread-scheduling bottlenecks, which is also the prerequisite for revisiting the replica-delegation mechanism (feature 4 above) under a sustained query rate.
 
 3. **Network Chaos Engineering & Unclean Crashes:**
    - Utilizing tools like Chaos Mesh to inject packet drops, random packet delay (jitter), and split-brain network partitions to evaluate the robustness of the Chord ring stabilization protocols under adversarial network conditions.
@@ -481,6 +481,14 @@ With the core architectures, dynamic self-healing, replication data migration, a
 4. **Massive Scale-Out Evaluations:**
    - A 100-virtual-node ring (K=4096 centroids) over the full 98,104-course corpus has already confirmed the routing-efficiency result at this scale (23.5× fewer hops than Clustered DHT at identical recall).
    - Remaining work: scaling to 1,000+ *physical* nodes to confirm the same $O(\log N + nprobe)$ routing-cost behavior beyond a single-host virtual-node ring, at a true enterprise scale.
+
+5. **Adaptive Cluster Retraining (Blue/Green Ring Migration):**
+   - The semantic mapping — the K-Means centroid table plus its TF-IDF vocabulary, referred to as the *artifact* — is trained once, offline, and frozen. As the corpus drifts (new topics appear, existing clusters grow unevenly), routing quality degrades as the frozen artifact falls out of sync with the data it maps.
+   - Retraining is not a hot swap: a new artifact changes both the cluster IDs and their dendrogram leaf ordering, i.e. the ring mapping itself, so every document's placement changes at once.
+   - Planned approach: run two independent Chord rings side by side, each on its own artifact, with a single entry point selecting which is live. The new ring is validated on a fraction of real traffic before an atomic cutover, and the old ring is kept warm so rollback is the same operation reversed — all without reintroducing a central routing authority.
+   - **Current focus — keeping the access coordinator from becoming a single point of failure.** The entry point (a DNS/headless-Service based address that clients resolve to reach a ring) is the one centralized component in this design, so the work is on bounding what its loss actually costs. Clients cache the peer addresses they have already resolved and dial those peers directly, and joining nodes learn the ring from a bootstrap contact rather than from a directory — so a DNS outage blocks only *new* clients that have never resolved an address and *new* nodes attempting to join. Every already-bootstrapped client keeps querying, and all intra-ring Chord routing, stabilization and self-healing continue untouched. This is the same discovery-vs-routing separation used by DNS seeds in Bitcoin, EIP-1459 node lists in Ethereum, the Mainline DHT bootstrap routers in BitTorrent, and gossip seed nodes in Cassandra: the central name answers *"name me a live peer"*, never *"who owns this key"*.
+   - The open tension being measured: that same client-side address cache is what makes a cutover non-instantaneous, since a cached client keeps talking to the old ring until its entry is refreshed. Cache lifetime therefore trades DNS-outage tolerance against cutover propagation delay, and picking that bound is part of the current work.
+   - Status: **design + prototype in progress** on the `feat/adaptive-retraining` branch. Nothing in this item is benchmarked yet.
 
 ---
 
