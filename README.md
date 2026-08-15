@@ -37,7 +37,7 @@ This system is the implementation for the diploma thesis **"Design of a Decentra
 │   │   └── metrics.py         # Shared evaluation metrics library
 │   ├── core/                  # Decoupled config loader and shared core utilities
 │   ├── ml/                    # ML clustering and vocabulary training pipeline
-│   └── scripts/               # Kaggle csv normalizer and synthetic course generators
+│   └── scripts/               # Kaggle csv normalizer, synthetic generators, blue/green ingestion log
 ├── local_simulation/          # Local Threaded Simulation environment configuration & scripts
 │   ├── run_simulation.py      # Simulation runner (scenario CLI)
 │   └── config.local.yaml      # Configuration for local simulation run
@@ -488,7 +488,8 @@ With the core architectures, dynamic self-healing, and replication data migratio
    - Planned approach: run two independent Chord rings side by side, each on its own artifact, with a single entry point selecting which is live. The new ring is validated on a fraction of real traffic before an atomic cutover, and the old ring is kept warm so rollback is the same operation reversed — all without reintroducing a central routing authority.
    - **Current focus — keeping the access coordinator from becoming a single point of failure.** The entry point (a DNS/headless-Service based address that clients resolve to reach a ring) is the one centralized component in this design, so the work is on bounding what its loss actually costs. Clients cache the peer addresses they have already resolved and dial those peers directly, and joining nodes learn the ring from a bootstrap contact rather than from a directory — so a DNS outage blocks only *new* clients that have never resolved an address and *new* nodes attempting to join. Every already-bootstrapped client keeps querying, and all intra-ring Chord routing, stabilization and self-healing continue untouched. This is the same discovery-vs-routing separation used by DNS seeds in Bitcoin, EIP-1459 node lists in Ethereum, the Mainline DHT bootstrap routers in BitTorrent, and gossip seed nodes in Cassandra: the central name answers *"name me a live peer"*, never *"who owns this key"*.
    - The open tension being measured: that same client-side address cache is what makes a cutover non-instantaneous, since a cached client keeps talking to the old ring until its entry is refreshed. Cache lifetime therefore trades DNS-outage tolerance against cutover propagation delay, and picking that bound is part of the current work.
-   - Status: **design + prototype in progress** on the `feat/adaptive-retraining` branch. Nothing in this item is benchmarked yet.
+   - Status: **design + prototype in progress** on the `feat/adaptive-retraining` branch — see [`k8s_bluegreen/`](k8s_bluegreen/). Two isolated rings, a repointable entry point with demonstrated cutover and rollback, and a shared replayable ingestion log feeding both rings are built and working; the canary gate, the discrepancy classifier and runtime artifact adoption are not. Nothing in this item is benchmarked yet.
+   - First measured result from the prototype: the second artifact is the first one *retrained after the corpus doubled* — its training input is a strict superset of the first's, the mildest realistic retraining event. With the ingested corpus and the node positions held identical and only the artifact varied, **every sampled document changed cluster and 14 of 15 changed owning node**. Nothing in the pipeline preserves label identity across training runs (K-Means cold-starts, then leaf-ordering relabels every centroid), so this is the concrete form of the "retraining is not a hot swap" claim above.
 
 ---
 

@@ -1,0 +1,12 @@
+# The shared ingestion log. Applied once, independently of either ring --
+# like the entry point, it outlives both, since a green ring must be able to
+# replay a log that predates it.
+#
+# There is no manifest for the log FILE itself: it is a hostPath directory
+# (/var/lib/dht-bluegreen/queue) created on first mount. The producer and the
+# readers each declare that path; nothing needs to own it.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml

@@ -2,9 +2,10 @@
 # kaggle_dataset_path -- that single path is what makes these two rings
 # different systems.
 #
-# centroids_v0.json is trained on the OLD half of the corpus (Development,
-# Business, IT & Software, Finance, Office Productivity). See
-# src/scripts/split_corpus.py.
+# centroids_v0.json is the HISTORICAL artifact: fit on the first half of the
+# corpus only (Development, Business, IT & Software, Finance, Office
+# Productivity) -- the data that existed before the drift. It has never seen
+# seven of the categories the ring now ingests. See src/scripts/split_corpus.py.
 apiVersion: v1
 kind: ConfigMap
 metadata:

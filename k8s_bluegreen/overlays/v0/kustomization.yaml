@@ -38,3 +38,28 @@ patches:
                 env:
                   - name: RING_VERSION
                     value: "v0"
+
+  # The reader's two per-ring settings. The shared log is NOT patched -- both
+  # rings mount the same one -- but the cursor is, so each ring owns only its
+  # own position in that log.
+  - target:
+      kind: Deployment
+      name: reader
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: reader
+      spec:
+        template:
+          spec:
+            containers:
+              - name: reader
+                env:
+                  - name: RING_VERSION
+                    value: "v0"
+            volumes:
+              - name: cursor
+                hostPath:
+                  path: /var/lib/dht-bluegreen/cursors/v0
+                  type: DirectoryOrCreate
