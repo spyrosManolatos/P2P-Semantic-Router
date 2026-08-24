@@ -27,14 +27,14 @@ from core.json_rpc_client import JSONRPCProxy
 from architectures.monolithic_linear.linear_search import MonolithicSearcher
 
 
-def rpc_client(address: str):
+def rpc_client(address: str, timeout: float = 30.0):
     """Returns an xmlrpc.client.ServerProxy for the xmlrpc-based architectures,
     or a JSONRPCProxy (talking to the FastAPI/httpx node) for the async_* ones --
     selected by the "a" (async container hostname prefix: "async-"/"av-") so
     existing call sites for the other architectures stay untouched."""
     host = address.split(":")[0]
     if host.startswith("async-") or host.startswith("av-"):
-        return JSONRPCProxy(address)
+        return JSONRPCProxy(address, timeout=timeout)
     return xmlrpc.client.ServerProxy(f"http://{address}", allow_none=True)
 
 
@@ -53,6 +53,46 @@ def run_dht_query(node_rpc, course_json, nprobe=None):
         return node_rpc.get_similar_courses(course_json, 1, True)
     else:
         return node_rpc.get_similar_courses(course_json, nprobe, True)
+
+def run_query_batch(node_rpc, ground_truth, nprobe, concurrency=1, use_nprobe=True):
+    """Runs every ground-truth query against `node_rpc`, at most `concurrency`
+    in flight, and returns a list ALIGNED TO ground_truth ORDER holding either
+    the raw run_dht_query return value or the Exception that was raised.
+
+    Order preservation is the point: the sequential loop this replaces builds
+    per-query recall lists positionally (the region/concentration analysis
+    indexes straight back into ground_truth), so completion order must not leak
+    into the results. concurrency=1 keeps the original one-at-a-time behaviour
+    exactly, which is what every non-sweep caller still uses.
+
+    Recall and hops are both computed server-side per query and do not depend on
+    how many queries are in flight, so concurrency changes only wall-clock -- NOT
+    the measurement. The one real risk is saturating the ring hard enough that
+    queries hit the RPC timeout and get counted as failures; the n=<completed>/
+    <total> counter printed by each sweep line is what exposes that."""
+    def _one(gt):
+        return run_dht_query(node_rpc, json.dumps(gt["course"]),
+                             nprobe if use_nprobe else None)
+
+    outcomes = [None] * len(ground_truth)
+    if concurrency <= 1:
+        for i, gt in enumerate(ground_truth):
+            try:
+                outcomes[i] = _one(gt)
+            except Exception as exc:
+                outcomes[i] = exc
+        return outcomes
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as pool:
+        futures = {pool.submit(_one, gt): i for i, gt in enumerate(ground_truth)}
+        for fut in concurrent.futures.as_completed(futures):
+            i = futures[fut]
+            try:
+                outcomes[i] = fut.result()
+            except Exception as exc:
+                outcomes[i] = exc
+    return outcomes
+
 
 def inject_data_simple(node_address, courses, arch_name):
     print(f"Injecting {len(courses)} courses into {arch_name} cluster via {node_address}...")
@@ -732,7 +772,14 @@ def run_vnode_disaster_scenario(args, subset_courses, ground_truth):
     if not wait_for_ring_convergence(node_addresses, timeout=args.converge_timeout):
         return
 
-    client = rpc_client(node_addresses[0])
+    client = rpc_client(node_addresses[0], timeout=getattr(args, "query_timeout", 30.0))
+
+    # Routing is verified HERE -- after the cycle closed, before any data is loaded.
+    # It used to run as a `docker exec` pre-flight before this process even started,
+    # which asked whether a still-forming ring could route and answered "no".
+    if not functional_routing_check(client, len(node_addresses),
+                                    k_clusters=getattr(args, "k_clusters", 5500)):
+        return
 
     # 1. Inject data (replication stays at config default RF=2 -- no override).
     bulk_inject(args, node_addresses, subset_courses)
@@ -813,20 +860,21 @@ def run_vnode_disaster_scenario(args, subset_courses, ground_truth):
         completed_by_nprobe = []    # denominator for the hops mean (see below)
         for npb in nprobe_values:
             recalls, hops_list = [], []
-            for gt in ground_truth:
-                c_json = json.dumps(gt["course"])
-                try:
-                    (res_tuple, hops), _ = run_dht_query(rpc, c_json, npb)
-                    retrieved_ids = [json.loads(r)["course_id"] for r in res_tuple]
-                    recalls.append(compute_recall(retrieved_ids, gt["ground_truth_ids"]))
-                    hops_list.append(hops)
-                except Exception:
+            outcomes = run_query_batch(rpc, ground_truth, npb,
+                                       concurrency=getattr(args, "query_concurrency", 1))
+            for gt, outcome in zip(ground_truth, outcomes):
+                if isinstance(outcome, Exception):
                     # A failed query IS zero recall under disaster, so it counts
                     # in the recall mean. It has no meaningful hop count though,
                     # so it is excluded from the hops mean -- hence the separate
                     # completed_by_nprobe denominator, which keeps that exclusion
                     # visible instead of silently shrinking the divisor.
                     recalls.append(0.0)
+                    continue
+                (res_tuple, hops), _ = outcome
+                retrieved_ids = [json.loads(r)["course_id"] for r in res_tuple]
+                recalls.append(compute_recall(retrieved_ids, gt["ground_truth_ids"]))
+                hops_list.append(hops)
             mean_r = sum(recalls) / len(recalls) if recalls else 0.0
             mean_h = sum(hops_list) / len(hops_list) if hops_list else 0.0
             recalls_by_nprobe.append(mean_r)
@@ -873,7 +921,7 @@ def run_vnode_disaster_scenario(args, subset_courses, ground_truth):
     if not surviving_nodes:
         print("All nodes killed; aborting disaster measurement.")
         return
-    surviving_client = rpc_client(surviving_nodes[0])
+    surviving_client = rpc_client(surviving_nodes[0], timeout=getattr(args, "query_timeout", 30.0))
 
     # A blind fixed sleep isn't enough to guarantee correctness: closest_preceding_node()
     # picks a finger table entry WITHOUT checking liveness, and if that entry is a stale
@@ -1196,6 +1244,64 @@ def wait_for_ring_convergence(addresses, timeout=180, poll_interval=5, stable_po
     return False
 
 
+def functional_routing_check(client, ring_size, k_clusters=5500, probes=8,
+                             attempts=6, wait=20):
+    """Can this ring ROUTE? Runs INSIDE the runner (so it streams to `docker logs`)
+    and AFTER the successor cycle has closed, which is the only point at which the
+    question is meaningful -- asking earlier measures how fast the ring formed.
+
+    Probes cluster ids spread evenly across the id space: they land far apart under
+    BOTH placements (SHA-1 scatters them; the semantic linear map puts distant ids
+    at distant positions), so they must resolve to several distinct owners via
+    multi-hop lookups. Collapsing onto one owner at ~0 hops is the dead-finger
+    signature that produced a 2.2%-recall run on 2026-08-21.
+
+    Retries, because fingers populate for a while after the cycle closes."""
+    step = max(1, k_clusters // probes)
+    cluster_ids = [(i * step) % k_clusters for i in range(probes)]
+    min_owners = min(3, max(2, ring_size // 2))
+
+    for attempt in range(1, attempts + 1):
+        owners, hop_counts, err = [], [], None
+        for cid in cluster_ids:
+            try:
+                chash = client.get_cluster_hash(cid)
+                owner, hops = client.find_successor_with_hops(str(chash))
+            except Exception as exc:
+                err = f"lookup for cluster {cid} raised {exc}"
+                break
+            owners.append(owner)
+            hop_counts.append(hops)
+
+        if err is None:
+            distinct = len(set(owners))
+            mean_hops = sum(hop_counts) / len(hop_counts)
+            print(f"  routing check [{attempt}/{attempts}] ring={ring_size} "
+                  f"distinct owners={distinct}/{len(cluster_ids)} "
+                  f"mean hops={mean_hops:.2f} (per-probe {hop_counts})")
+            bad = []
+            if distinct < min_owners:
+                bad.append(f"{len(cluster_ids)} well-separated keys collapsed onto "
+                           f"{distinct} owner(s), expected >= {min_owners}")
+            if ring_size > 4 and mean_hops < 1.0:
+                bad.append(f"mean hops {mean_hops:.2f} < 1.0 -- lookups terminate at "
+                           "the successor instead of routing")
+            if not bad:
+                print("  routing check PASS")
+                return True
+            for b in bad:
+                print(f"    - {b}")
+        else:
+            print(f"  routing check [{attempt}/{attempts}] {err}")
+
+        if attempt < attempts:
+            print(f"    fingers still populating; retrying in {wait}s")
+            time.sleep(wait)
+
+    print("  !! ROUTING CHECK FAILED -- refusing to measure on a ring that cannot route.")
+    return False
+
+
 def wait_for_finger_stability(addresses, timeout=600, poll_interval=10, stable_polls=2):
     """Wait until EVERY node reports is_finger_stable() -- i.e. each node's most
     recent complete fix_fingers sweep changed nothing -- for stable_polls
@@ -1286,16 +1392,18 @@ def run_hops_sweep(args, subset_courses, ground_truth):
     for npb in nprobe_values:
         hops_list, recalls = [], []
         err_counts = {}
-        for gt in ground_truth:
-            c_json = json.dumps(gt["course"])
-            try:
-                (res_tuple, hops), _ = run_dht_query(client, c_json, npb if use_nprobe else None)
-                retrieved = [json.loads(r)["course_id"] for r in res_tuple]
-                hops_list.append(hops)
-                recalls.append(compute_recall(retrieved, gt["ground_truth_ids"]))
-            except Exception as e:
-                name = type(e).__name__
+        outcomes = run_query_batch(client, ground_truth, npb,
+                                   concurrency=getattr(args, "query_concurrency", 1),
+                                   use_nprobe=use_nprobe)
+        for gt, outcome in zip(ground_truth, outcomes):
+            if isinstance(outcome, Exception):
+                name = type(outcome).__name__
                 err_counts[name] = err_counts.get(name, 0) + 1
+                continue
+            (res_tuple, hops), _ = outcome
+            retrieved = [json.loads(r)["course_id"] for r in res_tuple]
+            hops_list.append(hops)
+            recalls.append(compute_recall(retrieved, gt["ground_truth_ids"]))
         mean_h = sum(hops_list) / len(hops_list) if hops_list else 0.0
         mean_r = sum(recalls) / len(recalls) if recalls else 0.0
         results["nprobe_values"].append(npb)
@@ -1354,6 +1462,14 @@ def main():
     parser.add_argument("--doomed_queries", type=int, default=15,
                         help="Number of cooked test queries to build from the doomed cluster's own "
                              "member courses (mode=doomed).")
+    parser.add_argument("--query_concurrency", type=int, default=1,
+                        help="Queries in flight at once during a sweep. 1 = the original "
+                             "strictly-sequential loop. Higher values only change wall-clock: "
+                             "recall and hops are computed server-side per query. Watch the "
+                             "n=<completed>/<total> counter for timeout-induced failures.")
+    parser.add_argument("--query_timeout", type=float, default=30.0,
+                        help="Per-RPC timeout (s) for the query clients. Raise alongside "
+                             "--query_concurrency, since queueing inflates per-query latency.")
     parser.add_argument("--nprobe_list", type=str, default="",
                         help="Comma-separated nprobe values to sweep (mode=doomed). Empty = built-in "
                              "full sweep. Use to trim the low end for faster diagnostic runs, "

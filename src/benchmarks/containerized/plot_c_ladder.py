@@ -11,14 +11,21 @@ Panel layout follows the argument, not the data dump:
           as c falls. This is the observation.
   middle  the gap between them in percentage points. It collapses 10.4 -> 1.8.
           Read alone, this panel says "placement stops mattering".
-  right   recall lost per killed cluster, semantic / clustered. It never
-          approaches 1 (parity) at any rung, in either draw -- so the gap in the
-          middle panel closing is NOT placement ceasing to matter; it is the
-          victim holding less. This panel is what stops the middle one from
-          being over-read, so the two must never be shown apart. Its MAGNITUDE,
-          however, is draw-sensitive (2.4x-5.3x across two draws at the same
-          rung): read it for its sign and its distance from 1, never as a
-          measured value.
+  right   recall lost per killed cluster, semantic / clustered. Above parity
+          at every rung down to c=55 -- so the middle panel's collapse is NOT
+          placement ceasing to matter; it is the victim holding less. This panel
+          is what stops the middle one from being over-read, so the two must
+          never be shown apart.
+
+          Read it for sign and distance from parity, never as a measured value:
+          its magnitude is draw-sensitive (2.4x-5.3x across two draws at the
+          same rung), and at c=20 it stops being defined at all. The protocol
+          always targets cluster 5495, which alone carries 52 of the 500
+          queries, so the CLUSTERED numerator is pinned at the price of that one
+          cluster (6.24 of its 6.48 pp) while the denominator falls to 6 dead
+          clusters. The "average per dead cluster" is then an average over one
+          cluster. That point is therefore drawn hollow, on a dashed segment,
+          and excluded from the trend the panel asserts.
 
 x is c on a log scale, DESCENDING, so the reader travels the way the thesis
 argues -- from the sparse regime the thesis measured (c=1100) toward the dense
@@ -45,7 +52,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 K = 5500
-RUNGS = [5, 25, 100]
+RUNGS = [5, 25, 100, 275]
 
 plt.style.use("seaborn-v0_8-whitegrid"
               if "seaborn-v0_8-whitegrid" in plt.style.available else "default")
@@ -98,9 +105,14 @@ def _annotate(ax, xs, ys, texts, offsets):
     """Label every point, with the vertical offset chosen PER POINT: a label
     must sit on the side the line does not arrive from, which depends on the
     slope and so cannot be derived from the index alone."""
-    for x, y, t, dy in zip(xs, ys, texts, offsets):
-        ax.annotate(t, xy=(x, y), xytext=(0, dy), textcoords="offset points",
-                    ha="center", va="bottom" if dy > 0 else "top", fontsize=10)
+    if not (len(xs) == len(ys) == len(texts) == len(offsets)):
+        raise SystemExit(f"_annotate: {len(xs)} points but {len(offsets)} offsets "
+                         "-- zip would drop labels silently; add one per rung")
+    for x, y, t, off in zip(xs, ys, texts, offsets):
+        dx, dy = off if isinstance(off, tuple) else (0, off)
+        ax.annotate(t, xy=(x, y), xytext=(dx, dy), textcoords="offset points",
+                    ha="right" if dx < 0 else "left" if dx > 0 else "center",
+                    va="bottom" if dy > 0 else "top", fontsize=10)
 
 
 def main():
@@ -111,6 +123,10 @@ def main():
         root, "data", "benchmarks", "results", "containerized", "ladder"))
     p.add_argument("--out", default=os.path.join(
         root, "data", "benchmarks", "plots", "containerized", "c_ladder.png"))
+    p.add_argument("--pdf", action="store_true",
+                   help="Also write a vector .pdf beside the .png. Off by "
+                        "default: the thesis embeds the .png like every other "
+                        "figure, so the .pdf is an unused duplicate.")
     p.add_argument("--draw2", action="store_true",
                    help="Overlay the repeat ring draw (files *.draw2.json) as "
                         "open markers, so draw-to-draw spread is visible rather "
@@ -143,22 +159,52 @@ def main():
                 label="Clustered - Semantic")
     # The last point is approached by a steep descent from the left, so its
     # label goes BELOW; the others sit above a shallow segment.
-    _annotate(axs[1], cs, gap, [f"{g:.1f}" for g in gap], [10, 10, -10])
+    _annotate(axs[1], cs, gap, [f"{g:.1f}" for g in gap], [10, 10, -14, 10])
     axs[1].axhline(y=0, color="r", linestyle="--", label="Parity")
     axs[1].set_ylabel("Recall gap (percentage points)")
     axs[1].set_title("The Gap Collapses")
     axs[1].set_ylim(-1.5, 14)
 
     # ---- right: the gap PER UNIT OF DAMAGE ---------------------------------
+    # The ratio is only meaningful while the wound is large relative to ONE
+    # cluster. The protocol always kills the owner of cluster 5495, which alone
+    # carries 52/500 queries, so the clustered numerator floors at the price of
+    # that cluster; once the denominator falls to a handful of dead clusters the
+    # "average per dead cluster" is an average over one. Split the series there
+    # rather than drawing a trend through a point that does not support one.
     ratio = [s["drop_per_killed"] / c["drop_per_killed"] for s, c in zip(sem, clu)]
-    axs[2].plot(cs, ratio, marker="^", linestyle="-", color=DERIVED, markersize=9,
+    DEFINED_MIN_KILLED = 20     # ~ one order of magnitude above a single cluster
+    solid = [i for i, c in enumerate(clu) if c["killed"] >= DEFINED_MIN_KILLED]
+    limited = [i for i, c in enumerate(clu) if c["killed"] < DEFINED_MIN_KILLED]
+
+    axs[2].plot([cs[i] for i in solid], [ratio[i] for i in solid],
+                marker="^", linestyle="-", color=DERIVED, markersize=9,
                 label="Semantic / Clustered")
+    for i in limited:
+        # Dashed hand-off from the last defined rung, then a hollow marker: the
+        # value is plotted (hiding it would be worse) but visibly not part of
+        # the trend. Hollow + dashed survives grayscale printing.
+        prev = max(j for j in solid if j < i)
+        axs[2].plot([cs[prev], cs[i]], [ratio[prev], ratio[i]],
+                    linestyle=":", color=DERIVED, linewidth=1.4)
+        axs[2].plot([cs[i]], [ratio[i]], marker="^", linestyle="none",
+                    markersize=10, markerfacecolor="none", markeredgewidth=1.8,
+                    markeredgecolor="dimgray",
+                    label=f"Denominator-limited ({clu[i]['killed']} dead clusters)")
+    if limited:
+        # Anchored in axes coordinates, not to the point: the point sits on the
+        # floor of the panel and any point-anchored note collides with the axis.
+        axs[2].text(0.26, 0.14, "wound = 1 hot cluster;\nratio not interpretable",
+                    transform=axs[2].transAxes, ha="left", va="bottom",
+                    fontsize=9, style="italic", color="dimgray")
     # Mirror image of the middle panel: the first point is the foot of a steep rise.
-    _annotate(axs[2], cs, ratio, [f"{r:.1f}x" for r in ratio], [-10, 10, 10])
+    _annotate(axs[2], cs, ratio, [f"{r:.1f}x" for r in ratio],
+              [-10, 10, 10, (-12, 8)])
     axs[2].axhline(y=1.0, color="r", linestyle="--", label="Parity")
     axs[2].set_ylabel("Recall lost per killed cluster (ratio)")
-    axs[2].set_title("Per Unit of Damage: No Collapse")
-    axs[2].set_ylim(0, 6.5)
+    axs[2].set_title("Recall Loss per Dead Cluster")
+    # Headroom for a 4-entry legend: at ylim 6.5 the box covered the c=220 label.
+    axs[2].set_ylim(0, 8.6)
 
     # Optional second draw, plotted as open markers on the same axes so the
     # reader sees the spread instead of taking a stated error bar on trust.
@@ -207,15 +253,18 @@ def main():
     fig.tight_layout(rect=[0, 0, 1, 0.93])
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     fig.savefig(args.out, dpi=150, bbox_inches="tight")
-    pdf = os.path.splitext(args.out)[0] + ".pdf"
-    fig.savefig(pdf, bbox_inches="tight")
-    print(f"wrote {args.out}\nwrote {pdf}")
+    print(f"wrote {args.out}")
+    if args.pdf:
+        pdf = os.path.splitext(args.out)[0] + ".pdf"
+        fig.savefig(pdf, bbox_inches="tight")
+        print(f"wrote {pdf}")
 
     print(f"\n{'N':>5} {'c':>7} {'sem':>7} {'clu':>7} {'gap pp':>7} "
           f"{'k_sem':>6} {'k_clu':>6} {'ratio':>6}")
     for s, c, g, r in zip(sem, clu, gap, ratio):
+        flag = "" if c["killed"] >= DEFINED_MIN_KILLED else "  <- denominator-limited"
         print(f"{s['n']:>5} {s['c']:>7.0f} {s['disaster']:>7.3f} {c['disaster']:>7.3f} "
-              f"{g:>7.2f} {s['killed']:>6} {c['killed']:>6} {r:>6.2f}")
+              f"{g:>7.2f} {s['killed']:>6} {c['killed']:>6} {r:>6.2f}{flag}")
 
 
 if __name__ == "__main__":

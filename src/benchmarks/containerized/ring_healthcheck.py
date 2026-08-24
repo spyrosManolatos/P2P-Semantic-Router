@@ -30,6 +30,7 @@ Exit 0 = routable, 1 = do not trust this rung.
 """
 import argparse
 import sys
+import time
 
 try:
     import httpx
@@ -48,6 +49,45 @@ def rpc(address, method, *args, timeout=60.0):
     return payload.get("result")
 
 
+def walk_cycle(entry, ring_size, timeout=15.0):
+    """Follow successor pointers from `entry` and count the distinct nodes on the
+    cycle. Returns (nodes_seen, is_complete). Complete means the walk came back to
+    `entry` having visited every node exactly once -- i.e. one valid ring."""
+    seen, cur = set(), entry
+    for _ in range(ring_size + 1):
+        if cur in seen:
+            return len(seen), (cur == entry and len(seen) == ring_size)
+        seen.add(cur)
+        try:
+            cur = rpc(cur, "get_successor", timeout=timeout)
+        except Exception:
+            return len(seen), False
+        if not cur:
+            return len(seen), False
+    return len(seen), False
+
+
+def wait_for_cycle(entry, ring_size, deadline_sec, poll=15):
+    """Block until the SUCCESSOR RING is complete, before testing whether it can
+    ROUTE. These are different questions and they become true at different times:
+    the cycle closes first, fingers populate afterwards. Probing routing on a ring
+    that has not finished forming measures formation speed, not correctness -- at
+    N=550 that made the check a coin flip, failing one arm and passing the other
+    minutes apart on identical code."""
+    deadline, seen = time.time() + deadline_sec, 0
+    while time.time() < deadline:
+        seen, complete = walk_cycle(entry, ring_size)
+        if complete:
+            print(f"  ring FORMED: successor cycle covers all {ring_size} nodes")
+            return True
+        print(f"  ...waiting for successor ring: {seen}/{ring_size} nodes "
+              f"({int(deadline - time.time())}s left)")
+        time.sleep(poll)
+    print(f"  !! successor ring still incomplete ({seen}/{ring_size}) after "
+          f"{deadline_sec}s -- not a routing failure, the ring never formed.")
+    return False
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--arch", required=True)
@@ -56,6 +96,11 @@ def main():
     p.add_argument("--k", type=int, default=5500,
                    help="Cluster count, only used to spread the probe ids.")
     p.add_argument("--probes", type=int, default=8)
+    p.add_argument("--wait_cycle_sec", type=int, default=1800,
+                   help="Wait up to this long for the SUCCESSOR RING to close "
+                        "before probing routing. 0 disables the wait (the old "
+                        "behaviour: probe immediately, which at large N tests "
+                        "how fast the ring formed rather than whether it works).")
     args = p.parse_args()
 
     names = [c.strip() for c in args.containers.split(",") if c.strip()]
@@ -65,6 +110,9 @@ def main():
     # Evenly spaced ids, so they are far apart on the ring under either placement.
     step = max(1, args.k // args.probes)
     cluster_ids = [(i * step) % args.k for i in range(args.probes)]
+
+    if args.wait_cycle_sec > 0 and not wait_for_cycle(entry, ring_size, args.wait_cycle_sec):
+        sys.exit(1)
 
     owners, hop_counts = [], []
     for cid in cluster_ids:

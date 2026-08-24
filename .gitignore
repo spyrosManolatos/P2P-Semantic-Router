@@ -15,3 +15,27 @@ data/models/kaggle_centroids_k5500.json
 data/raw/corpus_v0.json
 data/models/centroids_v0.json
 data/models/centroids_v1.json
+
+# Frozen-encoder corpus embeddings (src/ml/embed_corpus.py) and the incremental
+# artifacts trained over them (src/ml/train_centroids_incremental.py). The .npy
+# is ~150 MB and fully reproducible from the corpus.
+data/models/embeddings_minilm.npy
+data/models/embeddings_minilm.ids.json
+data/models/centroids_e*.json
+
+# Cluster-stratified subsample (src/ml/sample_corpus.py) and its embeddings.
+# Reproducible from the corpus with a fixed seed; the full-corpus encode belongs
+# on the cluster, so this stands in for it locally. See src/ml/eval_recall.py.
+data/raw/corpus_sample*.json
+data/models/embeddings_sample.npy
+data/models/embeddings_sample.ids.json
+data/models/centroids_s*.json
+data/models/centroids_n*.json
+data/models/centroids_head.json
+data/models/centroids_warm*.json
+data/models/centroids_cold*.json
+data/models/centroids_kfull*.json
+data/models/centroids_khead*.json
+data/models/centroids_s[0-9]*_k*.json
+data/models/embeddings_n*.npy
+data/raw/corpus_sample_n*.json

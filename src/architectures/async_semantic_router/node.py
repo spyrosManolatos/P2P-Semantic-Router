@@ -73,7 +73,15 @@ class ChordNode:
 
         self.m = m if m is not None else self.config['dht']['hash_bits_m']
         self.rf = r if r is not None else self.config['dht']['replication_factor']
-        self.r = max(1, self.rf)
+        # Successor-LIST length. Deliberately NOT tied to the data replication
+        # factor: rf says how many copies of a document exist, r says how many
+        # backup successors a node can fall through when peers die. The disaster
+        # model kills RF+1 ADJACENT nodes -- one more than a list of length rf can
+        # hold -- so with r = rf the list empties BY CONSTRUCTION and stabilize()
+        # drops into the 160-finger rescue scan, which at N=550 never finished.
+        # Chord sizes this as r ~ log2(N). Data replication is untouched: replicas
+        # still go to self.successors[:self.rf] (see sync_replicas_to_successors).
+        self.r = max(1, int(self.config['dht'].get('successor_list_size', self.rf)))
         self.stabilize_interval = self.config['dht']['stabilize_interval_sec']
         self.timeout = self.config['network']['timeout_sec']
         self.node_id = self.get_addr_hash(self.address)
@@ -539,8 +547,15 @@ class ChordNode:
         if bootstrap_addr:
             try:
                 try:
-                    self.r = await self._rpc(bootstrap_addr, "get_replication_factor")
-                    self.rf = self.r
+                    # Sync the DATA replication factor from the bootstrap so the whole
+                    # ring agrees how many copies of a document exist. Do NOT touch
+                    # self.r here: that is the successor-LIST length (ring fault
+                    # tolerance), configured locally via dht.successor_list_size.
+                    # Clobbering it reset every joining node's list back to rf --
+                    # precisely the length the RF+1-adjacent-kill failure model is
+                    # guaranteed to exhaust, which sends stabilize() into the
+                    # 160-finger rescue scan and stalls healing indefinitely.
+                    self.rf = await self._rpc(bootstrap_addr, "get_replication_factor")
                 except Exception:
                     pass
                 succ = await self._rpc(bootstrap_addr, "find_successor", str(self.node_id))

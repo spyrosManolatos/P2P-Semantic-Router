@@ -43,6 +43,9 @@ CPU_BUDGET="${CPU_BUDGET:-0.6}"   # fraction of host cores to aim for IN TOTAL. 
                                  # us yield under contention, but a visible load of ~ncores
                                  # still looks like we own the machine. Raise to 1.0 when
                                  # the box is genuinely ours.
+CONFIG_FILE="${CONFIG_FILE:-./config.vnodes.yaml}"; export CONFIG_FILE
+                                 # compose mounts this over the in-image config, so
+                                 # config.vnodes.large.yaml needs no rebuild.
 SUBNET="${SUBNET:-172.28.0.0/16}"  # pins ring addresses. Node id = hash(IP), so a
                                  # DIFFERENT subnet = a different ring draw. Keep it
                                  # fixed across rungs or c and topology confound.
@@ -97,6 +100,10 @@ for pair in $PAIRS; do
   # benchmark's convergence gates are what actually decide readiness.
   BOOT=$(python3 -c "print(int(30 + $STAGGER * $V * 1.5))")
   CONVERGE=$(python3 -c "print(min(5400, int(600 + 1.2 * $N)))")
+  # 600 + 1.2N was fitted on small rings. At N=550 formation is steady but slow:
+  # measured 523/550 at the 1260s cut, still climbing at ~26 nodes/min with ZERO
+  # false-death evictions -- i.e. healthy, just unfinished. Allow an override.
+  [ -n "${CONVERGE_TIMEOUT:-}" ] && CONVERGE="$CONVERGE_TIMEOUT"
 
   for arch in $ARCHES; do
     banner ">>> N=$N (${C}c x ${V}v, c=K/N=$(python3 -c "print(round(5500/$N,1))")) | $arch"
@@ -105,19 +112,11 @@ for pair in $PAIRS; do
     echo ">>> booting ${BOOT}s, then convergence gates (timeout ${CONVERGE}s) take over..."
     sleep "$BOOT"
 
-    # Functional pre-flight: the convergence gates test whether fingers stopped
-    # CHANGING; this tests whether they are CORRECT. At N>=275 the former is never
-    # observed (fix_fingers runs continuously) so the gate times out and proceeds --
-    # and a malformed-finger ring silently returns nothing for CLUSTERED while
-    # looking fine for SEMANTIC. Refuse the rung instead of publishing that.
-    FIRST_C="${CLIST%%,*}"
-    if ! docker exec "$FIRST_C" python /app/src/benchmarks/containerized/ring_healthcheck.py \
-           --arch "$arch" --containers "$CLIST" \
-           --vnodes_per_container "$V" --k "$KCLUSTERS"; then
-      echo "  !! SKIPPING N=$N [$arch] -- ring failed the functional healthcheck."
-      ARCH="$arch" docker compose -f "$COMPOSE" down --remove-orphans >/dev/null 2>&1 || true
-      continue
-    fi
+    # The functional routing check now lives INSIDE evaluate.py, where it runs after
+    # the successor cycle closes and streams to `docker logs <runner>`. It used to be
+    # a `docker exec` pre-flight fired at BOOT+${BOOT}s -- before the ring had formed --
+    # so at N=550 it reported "finger tables are not routing" for a ring that was
+    # simply still building, and rejected the rung before the real gates ever ran.
 
     ARCH="$arch" docker compose -f "$COMPOSE" run --rm --no-deps runner -m "$EVAL" \
       --arch "$arch" --mode vnode_disaster \
