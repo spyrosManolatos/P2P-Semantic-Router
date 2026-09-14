@@ -102,71 +102,58 @@ also refreshes `data/benchmarks/plots/containerized/*.png`.
 
 ---
 
-## Script reference
+## Script Reference
 
-| Script | Experiment | Ring topology | Corpus / centroids | Produces |
+The repository provides automated shell scripts at the project root to reproduce every experiment in **Chapter 6 of the thesis**:
+
+| Script | Thesis Section | Experiment & Ring Topology | Corpus & Centroids | Output Artifacts |
 |---|---|---|---|---|
-| [`run_all_benchmarks_fullcorpus.sh`](../run_all_benchmarks_fullcorpus.sh) | The 5-node suite: `characterize`, `scale`, `fault`, `join`, `disaster` | **5-node** Compose, one fresh ring per mode | Full **98,104**-course corpus, `k=5500` centroids | `results_async_*`, `ring_characterization_async_*`, `fault_tolerance_results_async_*`, `node_join_results_async_*`, `disaster_results_async_*` + regenerated plots |
-| [`run_hops_scale_async.sh`](../run_hops_scale_async.sh) | **The headline result**: routing hops vs. `nprobe` at scale | **50 / 100-node** virtual-node ring (5 containers × 10/20 vnodes) | Full corpus, `k=4096` GT | `hops_sweep_results_async_{semantic,clustered}.json` |
-| [`run_vnode_disaster.sh`](../run_vnode_disaster.sh) | **Uniform-disaster distribution**: kill a correlated region, measure the *shape* of the damage | 100-node virtual-node ring (RF=2 replication kept on) | Full corpus, **500 uniform** cluster-tagged queries | `disaster_results_vnode_async_{semantic,clustered}.json` (per-query, per-cluster, region & concentration breakdowns) |
-| [`run_doomed_scenario.sh`](../run_doomed_scenario.sh) | **Worst case**: queries built from the largest cluster's own members, so their true top-1 is guaranteed destroyed | 100-node virtual-node ring | Full corpus, `k=5500`, high `nprobe` sweep (up to 640) | `doomed_scenario_results_async_{semantic,clustered}.json` |
+| [`run_all_benchmarks_fullcorpus.sh`](../run_all_benchmarks_fullcorpus.sh) | **6.2, 6.3, 6.4, 6.5, 6.7, 6.8.1** | 5-node suite (`characterize`, `scale`, `fault`, `join`, `disaster`) on 5 Docker containers | Full **98,104** courses, $K=5,500$ | `results_async_*`, `ring_characterization_async_*`, `fault_tolerance_results_async_*`, `node_join_results_async_*`, `disaster_results_async_*` + Figs 6.1, 6.3, 6.4, 6.5 |
+| [`run_hops_scale_async.sh`](../run_hops_scale_async.sh) | **6.3.1** | **Routing hops at scale**: 100-node virtual ring (5 containers × 20 vnodes) | Full corpus, $K=5,500$ | `hops_sweep_results_async_{semantic,clustered}.json` + Fig 6.2 |
+| [`run_vnode_disaster.sh`](../run_vnode_disaster.sh) | **6.8.2** | **Dense-ring hot-node disaster distribution**: 100 vnodes, 500 uniform queries | Full corpus, $K=5,500$ | `disaster_results_vnode_async_{semantic,clustered}.100nodes_uniform500.json` + Fig 6.6 |
+| [`run_doomed_scenario.sh`](../run_doomed_scenario.sh) | **6.8.3** | **Worst-case doomed queries**: 100 vnodes, sweep $nprobe \in [1, 640]$ | Full corpus, $K=5,500$ | `doomed_scenario_results_async_{semantic,clustered}.json` + Fig 6.7 |
+| [`run_disaster_ladder.sh`](../run_disaster_ladder.sh) | **6.8.4** | **The scale of $c = K/N$**: 5, 25, 100, 275 vnodes, 500 Zipf queries | Full corpus, $K=5,500$ | `ladder/prod.{semantic,clustered}.N*.json` + Fig 6.8 |
+| [`run_epicentre_variance.sh`](../run_epicentre_variance.sh) | **6.8.4** | **Ring draw geometry variance**: 2nd independent draw for $N=25, 100$ | Full corpus, $K=5,500$ | `ladder/prod.{semantic,clustered}.N*.draw2.json` |
+| [`run_nk_sweep.sh`](../run_nk_sweep.sh) | **6.8.4 / 7.3** | Density & parameter sweep across ring sizes and centroid ratios | Variable subsets / $K$ | Parameter exploration JSON dumps |
+| [`run_nk_sweep_ip.sh`](../run_nk_sweep_ip.sh) | **6.8.4 / 7.3** | Fixed IP-deterministic variation of the $N/K$ density sweep | Variable topologies | Multi-rung density logs |
 
-## Per-experiment artifact matrix
+## Per-Experiment Artifact Matrix (Thesis Table 6.1)
 
-Exactly which corpus, model, peer count, topology, and query set each run uses.
-All routing uses the same fine-grained centroid model
-(`data/models/kaggle_centroids_k5500.json`, 5,500 centroids trained on the full
-corpus); the `k4096` in a query filename names its ground-truth artifact, not a
-second model.
+Direct mapping to **Table 6.1 ("Δεδομένα, περιβάλλον, αρχιτεκτονικές, παράμετροι και αρχείο εξόδου ανά πείραμα")**:
 
-| Experiment (script) | Mode(s) | Peers | Topology | Corpus | Centroid model | Query / GT file |
-|---|---|---|---|---|---|---|
-| 5-node suite (`run_all_benchmarks_fullcorpus.sh`) | `characterize`, `scale`, `fault`, `join`, `disaster` | **5** | 5 containers, 1 Chord id each (Compose) | 98,104 (full) | `kaggle_centroids_k5500.json` | `queries_98k_k4096.json` |
-| Routing hops (`run_hops_scale_async.sh`) | `hops` | **50 / 100** | 5 containers × 10/20 vnodes (async_app_vnodes) | 98,104 (full) | `kaggle_centroids_k5500.json` | `queries_98k_k4096.json` |
-| Uniform disaster (`run_vnode_disaster.sh`) | `vnode_disaster` | **100** | 5 containers × 20 vnodes, RF=2 | 98,104 (full) | `kaggle_centroids_k5500.json` | `queries_98k_uniform_500.json` (500, cluster-tagged) |
-| Doomed worst-case (`run_doomed_scenario.sh`) | `doomed` | **100** | 5 containers × 20 vnodes | 98,104 (full) | `kaggle_centroids_k5500.json` | `queries_98k_k4096.json` (queries rebuilt from the largest cluster's members) |
+| Experiment (Section) | Environment | Architectures | Key Parameters | Output Artifact (in `data/benchmarks/results/containerized/`) |
+|---|---|---|---|---|
+| Ring characterization (6.2) | 5 nodes, Compose | Semantic, Clustered | 50 queries; load / adjacency analysis | `ring_characterization_async_*` |
+| Routing efficiency (6.3) | 5 nodes, Compose | Semantic, Clustered, (Mono) | $nprobe \in [1, 80]$; 50 queries | `results_async_*` |
+| Scale validation hops (6.3.1) | 100 vnodes ($5 \times 20$) | Semantic, Clustered | $nprobe \in \{1,2,3,5,8,12,20,40\}$; 50 queries | `hops_sweep_results_async_*` |
+| Latency & baseline (6.4) | 5 nodes, Compose | Semantic, Clustered, Mono | $nprobe \in [1, 80]$; 50 queries | `results_async_*` (monolithic) |
+| Dynamic node join (6.5) | $5 \to 6$ nodes, Compose | Semantic, Clustered | $nprobe = 2$; 50 queries; migration counts | `node_join_results_async_*` |
+| Single node failure (6.7) | 5 nodes, Compose | Semantic, Clustered | $nprobe = 2$; 1 random kill; baseline/transient/healed | `fault_tolerance_results_async_*` |
+| Sparse correlated failure (6.8.1) | 5 nodes, Compose | Semantic, Clustered | $nprobe = 5$; $RF+1 = 3$ contiguous kills | `disaster_results_async_*` |
+| Dense correlated failure (6.8.2) | 100 vnodes ($5 \times 20$) | Semantic, Clustered | $nprobe \in \{1,5,20\}$; hot-node kill; 500 uniform queries | `disaster_results_vnode_async_*` |
+| Doomed scenario worst-case (6.8.3) | 100 vnodes ($5 \times 20$) | Semantic, Clustered | $nprobe \in [1, 640]$; 3 kills; 8 doomed queries | `doomed_scenario_results_async_*` |
+| Scale of c ladder (6.8.4) | 5, 25, 100, 275 vnodes | Semantic, Clustered | $nprobe = 5$; $RF+1 = 3$ kills; 500 Zipf queries | `ladder/prod.{semantic,clustered}.N*` |
 
-Both architectures (`async_semantic`, `async_clustered`) run every experiment
-with identical inputs; only the placement/routing strategy differs.
-
-## The two ring topologies
-
-**5-node Compose** (`run_all_benchmarks_fullcorpus.sh`) uses the per-architecture
-stacks under `containerized_environment/async_{semantic_router,clustered_dht}/`,
-layering `docker-compose.k5500.yml` on top of the base compose file to point the
-nodes at the `k=5500` centroid model (`data/models/kaggle_centroids_k5500.json`).
-Every non-routing Chapter 6 result — ring characterization, scaling, fault
-tolerance, node join, and the small-ring disaster contrast — comes from here.
-
-**Virtual-node ring** (the other three scripts) uses
-`containerized_environment/async_app_vnodes.py` +
-`docker-compose.async_vnodes.yml` + `config.vnodes.yaml`. Each of 5 containers
-(`av-bootstrap`, `av-node-1..4`) hosts several independent Chord ring identities
-(virtual nodes), so a handful of containers form a ring of 50 or 100+ members on
-ordinary hardware. This exists because the routing-hops, disaster-distribution,
-and doomed results are all **scale-dependent** — they demonstrate $O(\log N)$ vs.
-$O(\text{nprobe}\cdot\log N)$ behaviour and correlated-failure blast radius, which
-a 5-node ring cannot show.
-
-## Usage
+## Usage Runbook
 
 ```bash
-# --- 5-node full-corpus suite (characterize, scale, fault, join, disaster) ---
+# 1. 5-node full-corpus suite (Sections 6.2, 6.3, 6.4, 6.5, 6.7, 6.8.1) + plot generation
 ./run_all_benchmarks_fullcorpus.sh
 
-# --- Routing-hops headline: 50 or 100 nodes, full corpus ---
-./run_hops_scale_async.sh 10      # 5 x 10 = 50-node ring (recommended first)
-./run_hops_scale_async.sh 20      # 5 x 20 = 100-node ring (the reported run)
+# 2. Headline routing hops at scale (Section 6.3.1, Figure 6.2)
+./run_hops_scale_async.sh 20 30    # 5 x 20 = 100-node virtual ring
 
-# --- Uniform disaster distribution: 100 nodes, 500 cluster-tagged queries ---
-./run_vnode_disaster.sh 20 30     # 5 x 20 = 100-node ring, 30s boot
-#   env overrides for the krylov large run (no code change):
-#   QFILE=... NPROBES=1,5,20 DISASTER_CLUSTER=-1 DS=98104 ARCHES=async_semantic,async_clustered
+# 3. Dense-ring hot-node disaster distribution (Section 6.8.2, Figure 6.6)
+./run_vnode_disaster.sh 20 30      # 100 vnodes, 500 uniform queries
 
-# --- Doomed worst-case: 100 nodes, high nprobe sweep ---
-./run_doomed_scenario.sh 20 30
-#   diagnostic subset:  ./run_doomed_scenario.sh 2 20 av-bootstrap,av-node-1
-#   env overrides:      NPROBES=1,20,80,160,320,640 DOOMED_Q=8
+# 4. Worst-case doomed queries (Section 6.8.3, Figure 6.7)
+./run_doomed_scenario.sh 20 30     # 100 vnodes, high nprobe sweep up to 640
+
+# 5. The scale of c ladder (Section 6.8.4, Table 6.12, Figure 6.8)
+./run_disaster_ladder.sh           # runs rungs across N=5, 25, 100, 275
+
+# 6. Regenerate ALL thesis figures (Figures 6.1 to 6.8) from saved results
+python3 -m src.benchmarks.containerized.plot
 ```
 
 ## Convergence
