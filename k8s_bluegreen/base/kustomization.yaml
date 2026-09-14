@@ -1,0 +1,10 @@
+# Shared ring definition. Never applied directly -- always through an overlay,
+# which supplies the namespace and the centroid artifact.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - service.yaml
+  - statefulset.yaml
+  - networkpolicy.yaml
+  - reader.yaml

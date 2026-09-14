@@ -1,0 +1,39 @@
+# Ring isolation, stated as policy.
+#
+# podSelector: {} selects every pod in the namespace; the single ingress rule
+# allows traffic only from pods in that SAME namespace. So a v0 pod accepts
+# connections from v0 pods and nothing else -- an explicit, machine-checkable
+# statement that the two rings never exchange packets.
+#
+# HONEST CAVEAT: Docker Desktop's built-in CNI does not ship a NetworkPolicy
+# controller, so on that cluster this object is ACCEPTED AND STORED BUT NOT
+# ENFORCED. It documents intent and it becomes real on any CNI that implements
+# policy (Calico, Cilium, kindnet with policy enabled).
+#
+# The isolation that IS enforced on every cluster, including Docker Desktop,
+# is namespace-scoped DNS: a node in dht-v0 resolves "dht-0.dht" through its
+# own namespace's search domain and can only ever receive a v0 address. No
+# node in either ring can NAME a peer in the other, so find_successor has no
+# route to cross even with the network wide open. This policy is defence in
+# depth, not the primary mechanism.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ring-isolation
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        # Same ring. This is what keeps v0 and v1 from exchanging packets:
+        # neither namespace matches the other's selector.
+        - podSelector: {}
+        # Clients. An ExternalName entry point proxies nothing -- a client
+        # resolves the alias and connects DIRECTLY to a ring pod -- so the ring
+        # must admit the CLIENT's namespace. Admitting clients is not the same
+        # as admitting the other ring: this selector matches namespaces labelled
+        # dht-client, and neither dht-v0 nor dht-v1 carries that label.
+        - namespaceSelector:
+            matchLabels:
+              dht-client: "true"

@@ -1,0 +1,18 @@
+# The ingestion log's namespace. It belongs to NEITHER ring -- that is the
+# whole point: the log is the shared source of truth both rings consume, so it
+# cannot live inside one of them.
+#
+# It contains no long-running pods. The producer (publish.sh) and the status
+# reader (queue-status.sh) are throwaway pods launched here on demand, because
+# `kubectl exec` is broken on some Docker Desktop clusters.
+#
+# It is deliberately NOT labelled dht-client: the producer writes to the log and
+# never speaks to a ring, so the rings' ingress policy has no reason to admit
+# it. Only the readers -- which live inside the rings themselves -- cross
+# between the log and a ring, and they cross in one direction only.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dht-queue
+  labels:
+    role: ingestion-log

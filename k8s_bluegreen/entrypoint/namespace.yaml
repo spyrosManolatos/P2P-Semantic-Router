@@ -1,0 +1,15 @@
+# Namespace holding the entry point. It contains NO pods -- only a DNS alias.
+#
+# The `role` labels are what the rings' NetworkPolicy matches on to admit
+# traffic: clients that resolve the alias connect DIRECTLY to a ring pod (an
+# ExternalName Service proxies nothing), so the ring must admit the client's
+# namespace, not the alias's.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dht-gateway
+  labels:
+    role: gateway
+    # Demo clients run here too, so this namespace must also be admitted by the
+    # rings' ingress policy.
+    dht-client: "true"

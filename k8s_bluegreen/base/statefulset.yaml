@@ -1,0 +1,107 @@
+# One ring. Deployed TWICE -- once per namespace -- with a different centroid
+# artifact mounted in each, and identical in every other respect. The identity
+# is deliberate:
+#
+#   ring position = SHA-1(address), and the address a node announces is
+#   "${POD_NAME}.dht" -- literally the same string in both rings (dht-0.dht,
+#   dht-1.dht, ...). Both rings therefore place their identities at exactly the
+#   same points on the Chord circle, and the ONLY difference between them is
+#   which artifact resolves a query to a cluster ID. Any later blue/green
+#   comparison is a controlled one: topology held constant, mapping varied.
+#
+# Storage note: this uses emptyDir, NOT the volumeClaimTemplates of the
+# single-ring StatefulSet in k8s/. Shard warm-start replays document placements
+# computed under whatever artifact was active when they were stored. A pod
+# restarting into a ring running a DIFFERENT artifact would resurrect
+# placements from the old mapping -- precisely the stale-placement problem the
+# retraining design exists to solve, and not something to smuggle in silently
+# at stage 0. Each ring builds cleanly from its own artifact.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: dht
+spec:
+  serviceName: dht          # -> per-pod DNS via the headless Service
+  replicas: 3
+  podManagementPolicy: OrderedReady   # dht-1 starts only once dht-0 is Ready
+  selector:
+    matchLabels:
+      app: dht
+  template:
+    metadata:
+      labels:
+        app: dht
+    spec:
+      terminationGracePeriodSeconds: 15
+      containers:
+        - name: node
+          image: p2p-semantic-router:latest
+          imagePullPolicy: Never      # Docker Desktop: use the locally built image
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              ORD="${POD_NAME##*-}"
+              if [ "$ORD" = "0" ]; then BOOT=""; else BOOT="--bootstrap dht-0.dht:5000"; fi
+              echo "[ring=${RING_VERSION}] addr=${POD_NAME}.dht ns=${POD_NAMESPACE} vnodes=${NUM_VNODES}"
+              exec python containerized_environment/app_vnodes.py \
+                --arch semantic --ip "${POD_NAME}.dht" --port 5000 \
+                --num_vnodes "${NUM_VNODES}" $BOOT
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            # Patched per overlay. Carried purely so `kubectl logs` and
+            # `kubectl exec -- env` can identify which ring a pod belongs to;
+            # nothing in the node code reads it.
+            - name: RING_VERSION
+              value: "unset"
+            - name: NUM_VNODES
+              value: "5"
+            - name: CONFIG_PATH
+              value: /app/containerized_environment/config.prod.yaml
+          ports:
+            - containerPort: 5000
+          # Chord-aware readiness: the pod receives no traffic until EVERY vnode
+          # it hosts reports a converged finger table (is_finger_stable = the
+          # sequential fix_fingers sweep changed nothing).
+          readinessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - |
+                  import os, sys, socket, xmlrpc.client
+                  socket.setdefaulttimeout(3)
+                  n = int(os.environ.get("NUM_VNODES", "5"))
+                  for p in range(5000, 5000 + n):
+                      s = xmlrpc.client.ServerProxy(f"http://127.0.0.1:{p}", allow_none=True)
+                      if not s.is_finger_stable():
+                          sys.exit(1)
+                  sys.exit(0)
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 8
+            failureThreshold: 60
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              memory: "1Gi"
+          volumeMounts:
+            - name: shards
+              mountPath: /shards
+            - name: config
+              mountPath: /app/containerized_environment/config.prod.yaml
+              subPath: config.prod.yaml
+      volumes:
+        - name: shards
+          emptyDir: {}
+        - name: config
+          configMap:
+            name: dht-config

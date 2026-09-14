@@ -15,7 +15,11 @@ plt.rcParams.update({
     'font.family': 'sans-serif'
 })
 
+import sys
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+src_dir = os.path.join(project_root, "src")
+if src_dir not in sys.path:
+    sys.path.append(src_dir)
 results_dir = os.path.join(project_root, "data", "benchmarks", "results", "containerized")
 plots_dir = os.path.join(project_root, "data", "benchmarks", "plots", "containerized")
 
@@ -448,9 +452,12 @@ def plot_vnode_disaster():
     loaded = []
     for arch, label, color in styles:
         d = load_result_file(f"disaster_results_vnode_{arch}.json")
+        if not d:
+            d = load_result_file(f"disaster_results_vnode_{arch}.100nodes_uniform500.json")
         if d:
             loaded.append((label, color, d))
     if not loaded:
+        print("Skipping vnode disaster plot: No disaster_results_vnode_*.json files found.")
         return
 
     fig, (axc, axb) = plt.subplots(1, 2, figsize=(15, 6))
@@ -469,19 +476,22 @@ def plot_vnode_disaster():
         xs = list(range(1, len(drops) + 1))
         axc.plot(xs, drops, "-", color=color, linewidth=2.4, label=f"{label} ({n_aff} clusters lose recall)")
         axc.fill_between(xs, 0, drops, color=color, alpha=0.15)
-    axc.set_xlim(0.5, int(max_aff * 1.35) + 2)
-    axc.set_ylim(0, 102)
-    axc.set_xlabel("Topic-cluster, ranked by recall lost (worst → least)", fontsize=12)
+
+    axc.set_xlim(1, max_aff)
+    axc.set_ylim(0, 105)
+    axc.set_xlabel("Topic-cluster, ranked by recall lost (worst \u2192 least)", fontsize=12)
     axc.set_ylabel("Recall@5 lost (percentage points)", fontsize=12)
     axc.set_title("Which clusters lose recall (and how much)", fontsize=13, fontweight="bold")
+    axc.legend(fontsize=10)
     axc.grid(True, linestyle="--", alpha=0.7)
-    axc.legend(fontsize=10, loc="upper right")
 
     # Panel B: headline summary bars (mean drop pp, % affected, recovery).
     metrics = ["Mean drop\n(all queries, pp)", "Queries\naffected (%)", "Home-cluster\nrecall after (%)"]
-    x = np.arange(len(metrics)); width = 0.36
+    x = np.arange(len(metrics))
+    width = 0.36
     for i, (label, color, d) in enumerate(loaded):
-        conc = d["concentration"]; reg = d["region_summary"]["in_killed"]
+        conc = d["concentration"]
+        reg = d["region_summary"]["in_killed"]
         vals = [conc["mean_drop_all"] * 100, conc["frac_affected"] * 100, reg["mean_disaster"] * 100]
         off = (-width / 2) if i == 0 else (width / 2)
         rects = axb.bar(x + off, vals, width, label=label, color=color, alpha=0.85)
@@ -489,8 +499,11 @@ def plot_vnode_disaster():
             axb.annotate(f"{r.get_height():.1f}", xy=(r.get_x() + r.get_width() / 2, r.get_height()),
                          xytext=(0, 3), textcoords="offset points", ha="center", va="bottom",
                          fontsize=9, fontweight="bold")
-    axb.set_xticks(x); axb.set_xticklabels(metrics, fontsize=10)
+    axb.set_xticks(x)
+    axb.set_xticklabels(metrics, fontsize=10)
+    axb.set_ylabel("Percentage points / Percent", fontsize=12)
     axb.set_title("Blast radius and recovery (nprobe=5)", fontsize=13, fontweight="bold")
+    axb.set_ylim(0, 105)
     axb.legend(fontsize=10)
     axb.grid(axis="y", linestyle="--", alpha=0.7)
 
@@ -499,14 +512,9 @@ def plot_vnode_disaster():
     plt.tight_layout(rect=[0, 0, 1, 0.95])
     plt.savefig(os.path.join(plots_dir, "vnode_disaster_distribution.png"), dpi=300, bbox_inches="tight")
     plt.close()
-    print("Generated vnode disaster distribution plot.")
+    print("Generated dense-ring disaster distribution plot.")
 
 def plot_doomed():
-    # Doomed worst-case: queries built from the killed cluster's own members.
-    # Doomed-query recall ~0 for both (by construction); the informative signal
-    # is the surrounding reachable-recall and routing cost vs nprobe -- semantic
-    # holds flat hops and climbs recall; clustered's hops explode and it times
-    # out past nprobe ~80 (recorded as 0 -> truncated here and annotated).
     styles = [
         ("async_clustered", "Clustered DHT",   "#3498db", "s"),
         ("async_semantic",  "Semantic Router", "#e74c3c", "o"),
@@ -560,6 +568,15 @@ def plot_doomed():
     plt.close()
     print("Generated doomed scenario plot.")
 
+def plot_c_ladder_figure():
+    ladder_dir = os.path.join(results_dir, "ladder")
+    if os.path.exists(ladder_dir) and any(f.startswith("prod.") for f in os.listdir(ladder_dir)):
+        try:
+            from benchmarks.containerized import plot_c_ladder
+            plot_c_ladder.main()
+        except Exception as e:
+            print(f"Could not generate c-ladder plot: {e}")
+
 def main():
     os.makedirs(plots_dir, exist_ok=True)
     plot_scale()
@@ -569,6 +586,7 @@ def main():
     plot_hops_sweep()
     plot_vnode_disaster()
     plot_doomed()
+    plot_c_ladder_figure()
 
 if __name__ == "__main__":
     main()

@@ -6,57 +6,84 @@ Unlike traditional categorical DHTs that rely on random SHA-1 hashing, this arch
 
 ## 🎓 Academic Context
 
-This system is the implementation for the diploma thesis **"Design of a Decentralized Vector Database for MLOps: An Approach Based on Chord DHT and Semantic Distribution"** (_«Σχεδιασμός Αποκεντρωμένης Διανυσματικής Βάσης Δεδομένων για MLOps: Μια Προσέγγιση Βασισμένη σε Chord DHT και Σημασιολογική Κατανομή»_), submitted to the **Computer Engineering and Informatics Department (CEID), University of Patras**.
+This repository hosts the implementation and experimental evaluation for the diploma thesis:
 
-- **Author:** Spyridon Manolatos
-- **Supervisor:** Gerasimos Vonitsanos
+> **«Σχεδιασμός Αποκεντρωμένης Διανυσματικής Βάσης Δεδομένων για MLOps: Μια Προσέγγιση Βασισμένη σε Chord DHT και Σημασιολογική Κατανομή»**  
+> *(Design of a Decentralized Vector Database for MLOps: An Approach Based on Chord DHT and Semantic Distribution)*  
+> **Department of Computer Engineering and Informatics (CEID), University of Patras** (September 2026)
+
+- **Author:** Spyridon Manolatos (Σπυρίδων Μανωλάτος)
+- **Laboratory:** Information Systems & Artificial Intelligence Laboratory (Εργαστήριο Πληροφοριακών Συστημάτων και Τεχνητής Νοημοσύνης)
+- **Supervisor (Επιβλέπων):** Prof. Spyros Sioutas (Καθηγητής Σπύρος Σιούτας)
+- **Research Advisor (Καθοδήγηση):** Dr. Gerasimos Vonitsanos (Δρ. Γεράσιμος Βονιτσάνος)
+
+---
+
+## 📖 Thesis Chapter & Benchmark Mapping
+
+| Thesis Chapter | Section & Topic | Implementation / Code Location | Key Artifacts & Manifests |
+|---|---|---|---|
+| **Chapter 3** | **System Analysis & Design**<br>• Three logical planes (Index, Routing, Data)<br>• Phase 1: Offline Topology Builder<br>• Phase 2: Semantic Ring Mapping<br>• Phase 3: Data Ingestion (`PUT`)<br>• Phase 4: Similarity Search (`GET`)<br>• Dynamic Join & Self-Healing | • [`src/ml/train_centroids_bigk.py`](src/ml/train_centroids_bigk.py)<br>• [`src/architectures/semantic_router/node.py`](src/architectures/semantic_router/node.py)<br>• [`src/core/config_loader.py`](src/core/config_loader.py) | • `data/models/kaggle_centroids_k5500.json`<br>• `Table 3.1 & 3.2` |
+| **Chapter 4** | **Baseline Architectures**<br>• 4.1 Monolithic Exact Oracle ($O(n)$)<br>• 4.2 Standard Chord DHT ($O(N)$)<br>• 4.3 Clustered Chord DHT ($O(nprobe \cdot \log N)$)<br>• 4.4 Comparative Synthesis | • [`src/architectures/monolithic_linear/`](src/architectures/monolithic_linear/)<br>• [`src/architectures/standard_dht/`](src/architectures/standard_dht/)<br>• [`src/architectures/clustered_dht/`](src/architectures/clustered_dht/) | • `Table 4.1` (Placement comparison) |
+| **Chapter 5** | **Implementation & Engineering**<br>• 5.1 Python 3, FastAPI, Docker, SciPy<br>• 5.2 Software architecture & common core<br>• 5.3 Configuration model (`config.*.yaml`)<br>• 5.6 Local threaded simulation<br>• 5.7 Containerized cluster (async stack)<br>• 5.8 Interactive Web Portal<br>• 5.10 Kubernetes orchestration | • [`containerized_environment/`](containerized_environment/)<br>• [`local_simulation/run_simulation.py`](local_simulation/run_simulation.py)<br>• [`k8s/`](k8s/) | • `Table 5.1 & 5.2` (Parameters)<br>• `Table 5.3` (`centroids.json` structure)<br>• `Table 5.4` (Method mapping)<br>• `Table 5.5` (`k8s/` manifests) |
+| **Chapter 6** | **Experimental Evaluation**<br>• 6.2 Ring Characterization<br>• 6.3 Routing Efficiency (nprobe vs hops/latency)<br>• 6.3.1 Scale validation (100 vnodes)<br>• 6.4 Baseline Latency & Monolithic Floor<br>• 6.5 Dynamic Node Join ($5 \to 6$)<br>• 6.7 Single-Node Failure Tolerance<br>• 6.8.1 Sparse Ring Disaster ($N=5$)<br>• 6.8.2 Dense Hot-Node Disaster ($N=100$)<br>• 6.8.3 Doomed Scenario Worst-Case<br>• 6.8.4 Scale of $c = K/N$ ($N \in \{5, 25, 100, 275\}$)<br>• 6.9 Synthesis & Comprehensive Scorecard | • [`src/benchmarks/containerized/evaluate.py`](src/benchmarks/containerized/evaluate.py)<br>• [`src/benchmarks/containerized/plot.py`](src/benchmarks/containerized/plot.py)<br>• [`src/benchmarks/containerized/plot_c_ladder.py`](src/benchmarks/containerized/plot_c_ladder.py)<br>• `run_all_benchmarks_fullcorpus.sh`<br>• `run_hops_scale_async.sh`<br>• `run_vnode_disaster.sh`<br>• `run_doomed_scenario.sh`<br>• `run_disaster_ladder.sh` | • `Table 6.1` (Experimental protocol)<br>• `Tables 6.2 – 6.12`<br>• `Figures 6.1 – 6.8`<br>• `Table 6.13` (Winner scorecard) |
+| **Chapter 7** | **Conclusions & Future Extensions**<br>• Sentence-BERT embeddings<br>• Distributed Apache Spark training<br>• Deterministic topology spread constraints<br>• Adaptive blue-green retraining | • [`k8s_bluegreen/`](k8s_bluegreen/)<br>• [`src/scripts/queue_producer.py`](src/scripts/queue_producer.py)<br>• [`src/scripts/queue_reader.py`](src/scripts/queue_reader.py) | • Blue-green zero-downtime manifests |
+
+---
 
 ## 📂 Directory Layout
 
 ```text
-├── data/                      # Database and results storage
-│   ├── benchmarks/            # Evaluation results and documentation
-│   │   ├── plots/             # Rendered charts (PNG)
-│   │   │   ├── local/         # Local simulation plots
-│   │   │   └── containerized/ # Containerized cluster plots
-│   │   ├── results/           # Raw collected metrics (JSON)
-│   │   │   ├── local/         # Local simulation JSON results
-│   │   │   └── containerized/ # Containerized cluster JSON results
-│   │   └── README.md          # Benchmark results analysis report
-│   ├── models/                # Trained K-Means centroids and TF-IDF artifacts
-│   └── raw/                   # Udemy Kaggle CSV dataset and normalized JSON payloads
-├── src/                       # Database source code
-│   ├── architectures/         # Database topologies
-│   │   ├── monolithic_linear/ # Centralized exhaustive KNN baseline
-│   │   ├── standard_dht/      # Standard random-hash Chord DHT ring
-│   │   ├── clustered_dht/     # Hashed K-Means clusters DHT ring
-│   │   └── semantic_router/   # Mapped Agglomerative semantic Chord ring (Proposed)
-│   ├── benchmarks/            # Scalability, fault-tolerance, node-join and disaster benchmarks
-│   │   ├── local/             # Local simulation evaluation scripts
-│   │   ├── containerized/     # Containerized cluster evaluation scripts
-│   │   └── metrics.py         # Shared evaluation metrics library
-│   ├── core/                  # Decoupled config loader and shared core utilities
-│   ├── ml/                    # ML clustering and vocabulary training pipeline
-│   └── scripts/               # Kaggle csv normalizer and synthetic course generators
-├── local_simulation/          # Local Threaded Simulation environment configuration & scripts
-│   ├── run_simulation.py      # Simulation runner (scenario CLI)
-│   └── config.local.yaml      # Configuration for local simulation run
-├── containerized_environment/ # Distributed Containerized environment configuration & files
-│   ├── Dockerfile             # Node container definition
-│   ├── docker-compose.yml     # Distributed cluster setup and client runner
-│   ├── app.py                 # Node service launcher (one ring identity per process)
-│   ├── app_vnodes.py          # Virtual-node launcher (many ring identities per process)
-│   ├── docker-compose.vnodes.yml # Isolated large-ring (25-140 node) topology
-│   ├── config.prod.yaml       # Configuration for Docker production run
-│   └── config.vnodes.yaml     # Configuration for the virtual-node scaling study (K=4096)
-├── k8s/                       # Kubernetes deployment (StatefulSet-based ring, see k8s/README.md)
-├── docs/                      # Project documentation (pipeline notes, scripts.md)
-├── run_all_benchmarks_fullcorpus.sh # 5-node suite: characterize/scale/fault/join/disaster (see docs/scripts.md)
-├── run_hops_scale_async.sh    # Headline routing-hops scaling result (50/100-node virtual ring)
-├── run_vnode_disaster.sh      # 100-node uniform-disaster distribution
-├── run_doomed_scenario.sh     # 100-node worst-case scenario
-├── config.yaml                # Decoupled network and database parameters file
-└── README.md                  # Main project overview and run instructions
+├── data/                               # Database and results storage
+│   ├── benchmarks/                     # Evaluation results and documentation
+│   │   ├── plots/containerized/        # Rendered Thesis Figures 6.1 to 6.8 (PNG)
+│   │   ├── results/containerized/      # Raw collected metrics (JSON)
+│   │   │   └── ladder/                 # Density ladder raw runs (c = K/N, N=5..275)
+│   │   ├── queries/                    # Standardized query artifacts & ground truth
+│   │   └── README.md                   # Full Evaluation Report & Chapter 6 Scorecard
+│   ├── models/                         # Trained K-Means centroids and TF-IDF artifacts
+│   └── raw/                            # Normalized Kaggle Udemy courses (98,104 records)
+├── src/                                # Database source code
+│   ├── architectures/                  # Database topologies
+│   │   ├── monolithic_linear/          # Centralized exhaustive KNN baseline (Chapter 4.1)
+│   │   ├── standard_dht/               # Standard random-hash Chord DHT (Chapter 4.2)
+│   │   ├── clustered_dht/              # Hashed K-Means clusters DHT (Chapter 4.3)
+│   │   ├── semantic_router/            # Mapped Agglomerative semantic Chord (Proposed, Ch. 3)
+│   │   ├── async_clustered_dht/        # Async FastAPI/httpx Clustered DHT node & server
+│   │   └── async_semantic_router/      # Async FastAPI/httpx Semantic Router node & server
+│   ├── benchmarks/                     # Evaluation suites, metrics, and plotting tools
+│   │   ├── containerized/              # Containerized cluster evaluation scripts
+│   │   │   ├── evaluate.py             # Unified benchmark runner for all Chapter 6 modes
+│   │   │   ├── plot.py                 # Generates Figures 6.1 to 6.7 and invokes c-ladder
+│   │   │   └── plot_c_ladder.py        # Generates Figure 6.8 (Scale of c three-panel plot)
+│   │   └── metrics.py                  # Shared evaluation metrics library
+│   ├── core/                           # Decoupled config loader and shared core utilities
+│   ├── ml/                             # ML clustering and vocabulary training pipeline
+│   └── scripts/                        # Dataset normalizers, synthetic generators, placement tools
+├── local_simulation/                   # Local Threaded Simulation environment (Chapter 5.6)
+│   ├── run_simulation.py               # Simulation runner (routing, failure, join, boot CLI)
+│   └── config.local.yaml               # Configuration for local simulation run
+├── containerized_environment/          # Distributed Containerized environment (Chapter 5.7)
+│   ├── Dockerfile                      # Node container definition (python:3.12-slim)
+│   ├── docker-compose.async_vnodes.yml # Isolated virtual-node topology (N=50..275)
+│   ├── app.py                          # Node service launcher (single ring identity)
+│   ├── async_app_vnodes.py             # Virtual-node launcher (multi-identity per container)
+│   └── config.vnodes.yaml              # Configuration for full-corpus runs (K=5500)
+├── k8s/                                # Kubernetes StatefulSet deployment (Chapter 5.10)
+├── k8s_bluegreen/                      # Blue-Green adaptive retraining extension (Chapter 7.3)
+├── docs/                               # Project documentation
+│   ├── pipeline.md                     # Four-phase system pipeline & two-level routing
+│   └── scripts.md                      # Comprehensive benchmark runner documentation
+├── run_all_benchmarks_fullcorpus.sh    # 5-node suite: Sections 6.2, 6.3, 6.4, 6.5, 6.7, 6.8.1
+├── run_hops_scale_async.sh             # 100-node routing-hops headline: Section 6.3.1 (Fig 6.2)
+├── run_vnode_disaster.sh               # 100-node hot-node disaster: Section 6.8.2 (Fig 6.6)
+├── run_doomed_scenario.sh              # 100-node worst-case doomed queries: Section 6.8.3 (Fig 6.7)
+├── run_disaster_ladder.sh              # The scale of c ladder (N=5, 25, 100, 275): Section 6.8.4 (Fig 6.8)
+├── run_epicentre_variance.sh           # Ring draw geometry variance: Section 6.8.4
+├── run_nk_sweep.sh                     # N/K density sweeps
+├── run_nk_sweep_ip.sh                  # IP-deterministic variation of density sweeps
+├── config.yaml                         # Decoupled network and database parameters
+└── README.md                           # Main project overview and run instructions
 ```
 
 ## 🏗️ Approaches Implemented
@@ -297,9 +324,9 @@ The raw API is also available: `POST /query` (`{"query": "...", "nprobe": 1-10, 
 
 ## 📊 Benchmarks & Results
 
-> **📈 Full evaluation report:** [`data/benchmarks/README.md`](data/benchmarks/README.md) — the head-to-head **Semantic Router vs. Clustered DHT** comparison across all seven experiments (scaling, routing hops, fault tolerance, node join, sparse & dense disaster, doomed worst-case), each with its figure, the underlying numbers, and a **who-wins verdict**, plus a summary table and the honest bottom line.
+> **📈 Full Evaluation Report:** [`data/benchmarks/README.md`](data/benchmarks/README.md) — the comprehensive head-to-head **Semantic Router vs. Clustered DHT** evaluation report across all ten experiments from Chapter 6 (characterization, scaling, routing hops at scale, baseline latency, single failure, dynamic node join, sparse disaster, dense hot-node disaster, doomed worst-case, scale of $c = K/N$), with figures, underlying tables, and the thesis scorecard (**Table 6.13**).
 
-This project supports running comprehensive benchmarking suites in both the **local threaded simulation** and the **containerized Docker environment**. The results for each run are isolated into separate folders.
+This project supports running comprehensive benchmarking suites in both the **local threaded simulation** and the **containerized Docker environment**.
 
 ### 1. Local Threaded Evaluation
 Run evaluations and generate plots for the local loopback DHT ring:
@@ -308,7 +335,7 @@ Run evaluations and generate plots for the local loopback DHT ring:
     ```bash
     python3 -m src.benchmarks.local.evaluate --mode all
     ```
-*   **Execute specific modes (scale / fault / join / load):**
+*   **Execute specific modes (scale / fault / join):**
     ```bash
     python3 -m src.benchmarks.local.evaluate --mode scale --dataset_size 2000
     ```
@@ -318,19 +345,25 @@ Run evaluations and generate plots for the local loopback DHT ring:
     ```
     _Outputs are saved to `data/benchmarks/results/local/` and `data/benchmarks/plots/local/`._
 
-### 2. Containerized Cluster Evaluation
+### 2. Containerized Cluster Evaluation (Chapter 6 Production Suite)
 
-#### Option A — Full suite via runner scripts (recommended)
-Four scripts at the project root each orchestrate one containerized benchmark end to end — bring up the ring, inject the full corpus, run `evaluate.py`, tear down, and (for the 5-node suite) regenerate the comparison charts:
+#### Automated End-to-End Runner Scripts
+The runner scripts at the project root orchestrate containerized benchmarks end to end — spinning up the isolated Docker bridge ring, injecting the full 98,104 Kaggle corpus, executing `evaluate.py`, tearing down containers, and generating the evaluation figures:
 
 ```bash
-./run_all_benchmarks_fullcorpus.sh      # 5-node suite: characterize, scale, fault, join, disaster
-./run_hops_scale_async.sh 20            # 100-node routing-hops headline (5 x 20 vnodes)
-./run_vnode_disaster.sh 20 30           # 100-node uniform-disaster distribution
-./run_doomed_scenario.sh 20 30          # 100-node worst-case scenario
+./run_all_benchmarks_fullcorpus.sh      # 5-node suite: characterize, scale, fault, join, disaster (Figs 6.1, 6.3, 6.4, 6.5)
+./run_hops_scale_async.sh 20            # 100-node routing-hops headline: 5 x 20 vnodes (Fig 6.2)
+./run_vnode_disaster.sh 20 30           # 100-node uniform hot-node disaster distribution (Fig 6.6)
+./run_doomed_scenario.sh 20 30          # 100-node worst-case scenario: nprobe sweep up to 640 (Fig 6.7)
+./run_disaster_ladder.sh                # The scale of c ladder: N in {5, 25, 100, 275} (Fig 6.8)
 ```
 
-All four run the async **semantic-router vs. clustered-DHT** comparison on the full 98,104-course corpus, against a shared exact full-corpus ground truth so the two architectures are measured identically.
+All runs evaluate the async **Semantic Router vs. Clustered DHT** comparison on the full 98,104-course corpus against pre-computed exact top-5 cosine ground truth.
+
+To regenerate **all 8 thesis figures** from the existing results in one command without re-running long benchmarks:
+```bash
+python3 -m src.benchmarks.containerized.plot
+```
 
 > **[`docs/scripts.md`](docs/scripts.md) is the single source of truth for running these** — the end-to-end runbook (prerequisites → the global centroid artifact every peer holds → query generation → each script), the per-experiment artifact matrix (corpus, peer count, topology, model, query file), and the ring-convergence notes.
 
@@ -488,7 +521,8 @@ With the core architectures, dynamic self-healing, and replication data migratio
    - Planned approach: run two independent Chord rings side by side, each on its own artifact, with a single entry point selecting which is live. The new ring is validated on a fraction of real traffic before an atomic cutover, and the old ring is kept warm so rollback is the same operation reversed — all without reintroducing a central routing authority.
    - **Current focus — keeping the access coordinator from becoming a single point of failure.** The entry point (a DNS/headless-Service based address that clients resolve to reach a ring) is the one centralized component in this design, so the work is on bounding what its loss actually costs. Clients cache the peer addresses they have already resolved and dial those peers directly, and joining nodes learn the ring from a bootstrap contact rather than from a directory — so a DNS outage blocks only *new* clients that have never resolved an address and *new* nodes attempting to join. Every already-bootstrapped client keeps querying, and all intra-ring Chord routing, stabilization and self-healing continue untouched. This is the same discovery-vs-routing separation used by DNS seeds in Bitcoin, EIP-1459 node lists in Ethereum, the Mainline DHT bootstrap routers in BitTorrent, and gossip seed nodes in Cassandra: the central name answers *"name me a live peer"*, never *"who owns this key"*.
    - The open tension being measured: that same client-side address cache is what makes a cutover non-instantaneous, since a cached client keeps talking to the old ring until its entry is refreshed. Cache lifetime therefore trades DNS-outage tolerance against cutover propagation delay, and picking that bound is part of the current work.
-   - Status: **design + prototype in progress** on the `feat/adaptive-retraining` branch. Nothing in this item is benchmarked yet.
+   - Status: **design + prototype in progress** on the `feat/adaptive-retraining` branch — see [`k8s_bluegreen/`](k8s_bluegreen/). Two isolated rings, a repointable entry point with demonstrated cutover and rollback, and a shared replayable ingestion log feeding both rings are built and working; the canary gate, the discrepancy classifier and runtime artifact adoption are not. Nothing in this item is benchmarked yet.
+   - First measured result from the prototype: the second artifact is the first one *retrained after the corpus doubled* — its training input is a strict superset of the first's, the mildest realistic retraining event. With the ingested corpus and the node positions held identical and only the artifact varied, **every sampled document changed cluster and 14 of 15 changed owning node**. Nothing in the pipeline preserves label identity across training runs (K-Means cold-starts, then leaf-ordering relabels every centroid), so this is the concrete form of the "retraining is not a hot swap" claim above.
 
 ---
 

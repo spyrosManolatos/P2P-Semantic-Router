@@ -1,0 +1,80 @@
+# The ring's ingestion reader. Deployed TWICE -- once per namespace -- from
+# this one definition, with only the cursor location and the ring label patched.
+#
+# It lives INSIDE the ring's namespace on purpose. That is what lets it use the
+# bare name "dht:5000": the short name resolves through this namespace's own DNS
+# search domain, so a reader in dht-v0 can physically only reach v0 pods, by the
+# same mechanism that keeps the rings from naming each other. The reader is a
+# client of exactly one ring and cannot become a bridge between them.
+#
+# It holds no peer list -- the ring's headless Service is the only membership
+# source -- and it does not compute cluster assignments; put_course does that on
+# the node, using that ring's artifact. See src/scripts/queue_reader.py.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reader
+spec:
+  replicas: 1           # exactly one consumer per ring: two would race on the cursor
+  strategy:
+    type: Recreate      # never run two readers at once during a rollout
+  selector:
+    matchLabels:
+      app: reader
+  template:
+    metadata:
+      labels:
+        app: reader
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+        - name: reader
+          image: p2p-semantic-router:latest
+          imagePullPolicy: Never
+          command:
+            - python
+            - src/scripts/queue_reader.py
+            - --ring
+            - $(RING_VERSION)
+            - --queue
+            - /queue/courses.jsonl
+            - --cursor
+            - /cursor/offset.json
+            - --endpoint
+            - dht:5000
+          env:
+            - name: RING_VERSION
+              value: "unset"        # patched per overlay
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              memory: "512Mi"
+          volumeMounts:
+            - name: queue
+              mountPath: /queue
+              readOnly: true        # the log is append-only from a ring's side
+            - name: cursor
+              mountPath: /cursor
+      volumes:
+        # THE SHARED LOG. Both rings mount the same host directory -- that is
+        # the point of stage 2: one document stream, consumed independently, so
+        # any difference between the rings is attributable to the artifact and
+        # nothing else. Mounted read-only here, so a ring can consume the log
+        # but never write to it; only the producer in dht-queue can append.
+        #
+        # hostPath is a single-node convenience (Docker Desktop / kind). On a
+        # real multi-node cluster this becomes a ReadWriteMany volume or, in
+        # production, a partitioned log. See k8s_bluegreen/README.md.
+        - name: queue
+          hostPath:
+            path: /var/lib/dht-bluegreen/queue
+            type: DirectoryOrCreate
+        # THIS RING'S CURSOR, and only this one. The path is patched per
+        # overlay to a per-ring directory, so neither reader can see or corrupt
+        # the other's progress: the log is shared, the position in it is not.
+        - name: cursor
+          hostPath:
+            path: /var/lib/dht-bluegreen/cursors/unset
+            type: DirectoryOrCreate

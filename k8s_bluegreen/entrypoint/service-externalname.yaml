@@ -1,0 +1,48 @@
+# THE ENTRY POINT — the single address clients hold.
+#
+#     dht-active.dht-gateway.svc.cluster.local
+#
+# It is an ExternalName Service, which is pure DNS: Kubernetes publishes a CNAME
+# from this name to whatever `externalName` says, and proxies nothing. The
+# target is a ring's HEADLESS Service, which itself resolves to the A records of
+# every ready pod in that ring.
+#
+#     dht-active.dht-gateway  ──CNAME──>  dht.dht-v0.svc.cluster.local
+#                                              └── A 10.1.0.x  (dht-0)
+#                                              └── A 10.1.0.y  (dht-1)
+#                                              └── A 10.1.0.z  (dht-2)
+#
+# Consequences that matter:
+#
+#   * NO MEMBERSHIP IS HELD HERE. This object names one Service, never a peer
+#     list. Pods joining, leaving or being rescheduled are reflected by the
+#     ring's own headless Service with no change to this object. There is no
+#     central directory to keep in sync.
+#
+#   * NO COMPONENT ON THE REQUEST PATH. The client's own resolver returns pod
+#     IPs and the client connects straight to a peer. Nothing here sees, load
+#     balances, or routes a single query -- so this cannot become the central
+#     routing authority A1 forbids. Once a client reaches any peer, every hop
+#     after that is ordinary Chord.
+#
+#   * CUTOVER IS ONE FIELD. See cutover.sh, or:
+#       kubectl patch svc dht-active -n dht-gateway --type=merge \
+#         -p '{"spec":{"externalName":"dht.dht-v1.svc.cluster.local"}}'
+#
+# HONEST COST: this is DNS, so propagation is bounded by TTL and by client-side
+# caching, not immediate. CoreDNS serves these records with a 30s TTL by
+# default, and some client runtimes (notably the JVM) cache far longer. A
+# client that has already resolved and is holding an open connection keeps
+# talking to the OLD ring until it re-resolves. That is the documented tradeoff
+# accepted in exchange for having no application component in the request path:
+# resilience and simplicity bought at the price of instantaneous cutover.
+apiVersion: v1
+kind: Service
+metadata:
+  name: dht-active
+  namespace: dht-gateway
+  annotations:
+    bluegreen.thesis/live-ring: "v0"
+spec:
+  type: ExternalName
+  externalName: dht.dht-v0.svc.cluster.local
