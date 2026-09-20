@@ -19,13 +19,32 @@ This repository hosts the implementation and experimental evaluation for the dip
 
 ---
 
+## ⚡ Interactive Web Portal Demo (Thesis Section 5.8)
+
+The system includes an interactive browser-based visualization portal ([`src/api/main.py`](src/api/main.py), full guide in [`docs/gateway.md`](docs/gateway.md)). It visualizes real-time Chord lookups across the $2^{160}$ identifier space, node positions, target clusters, and finger table hops:
+
+```bash
+# 1. Launch the 5-node Async Semantic Router with Gateway
+cd containerized_environment/async_semantic_router && docker compose up -d
+
+# 2. Populate the in-memory ring with courses
+docker compose exec async-gateway python src/scripts/inject_data.py \
+    --node async-bootstrap-node:5000 --limit 500 --transport json
+
+# 3. Open in your browser:
+#    👉 Web Interface: http://localhost:8080
+#    👉 Interactive Swagger API: http://localhost:8080/docs
+```
+
+---
+
 ## 📖 Thesis Chapter & Benchmark Mapping
 
 | Thesis Chapter | Section & Topic | Implementation / Code Location | Key Artifacts & Manifests |
 |---|---|---|---|
 | **Chapter 3** | **System Analysis & Design**<br>• Three logical planes (Index, Routing, Data)<br>• Phase 1: Offline Topology Builder<br>• Phase 2: Semantic Ring Mapping<br>• Phase 3: Data Ingestion (`PUT`)<br>• Phase 4: Similarity Search (`GET`)<br>• Dynamic Join & Self-Healing | • [`src/ml/train_centroids_bigk.py`](src/ml/train_centroids_bigk.py)<br>• [`src/architectures/semantic_router/node.py`](src/architectures/semantic_router/node.py)<br>• [`src/core/config_loader.py`](src/core/config_loader.py) | • `data/models/kaggle_centroids_k5500.json`<br>• `Table 3.1 & 3.2` |
 | **Chapter 4** | **Baseline Architectures**<br>• 4.1 Monolithic Exact Oracle ($O(n)$)<br>• 4.2 Standard Chord DHT ($O(N)$)<br>• 4.3 Clustered Chord DHT ($O(nprobe \cdot \log N)$)<br>• 4.4 Comparative Synthesis | • [`src/architectures/monolithic_linear/`](src/architectures/monolithic_linear/)<br>• [`src/architectures/standard_dht/`](src/architectures/standard_dht/)<br>• [`src/architectures/clustered_dht/`](src/architectures/clustered_dht/) | • `Table 4.1` (Placement comparison) |
-| **Chapter 5** | **Implementation & Engineering**<br>• 5.1 Python 3, FastAPI, Docker, SciPy<br>• 5.2 Software architecture & common core<br>• 5.3 Configuration model (`config.*.yaml`)<br>• 5.6 Local threaded simulation<br>• 5.7 Containerized cluster (async stack)<br>• 5.8 Interactive Web Portal<br>• 5.10 Kubernetes orchestration | • [`containerized_environment/`](containerized_environment/)<br>• [`local_simulation/run_simulation.py`](local_simulation/run_simulation.py)<br>• [`k8s/`](k8s/) | • `Table 5.1 & 5.2` (Parameters)<br>• `Table 5.3` (`centroids.json` structure)<br>• `Table 5.4` (Method mapping)<br>• `Table 5.5` (`k8s/` manifests) |
+| **Chapter 5** | **Implementation & Engineering**<br>• 5.1 Python 3, FastAPI, Docker, SciPy<br>• 5.2 Software architecture & common core<br>• 5.3 Configuration model (`config.*.yaml`)<br>• 5.6 Local threaded simulation<br>• 5.7 Containerized cluster (async stack)<br>• 5.8 Interactive Web Portal<br>• 5.10 Kubernetes orchestration | • [`containerized_environment/`](containerized_environment/)<br>• [`local_simulation/run_simulation.py`](local_simulation/run_simulation.py)<br>• [`src/api/main.py`](src/api/main.py)<br>• [`k8s/`](k8s/) | • `Table 5.1 & 5.2` (Parameters)<br>• `Table 5.3` (`centroids.json` structure)<br>• `Table 5.4` (Method mapping)<br>• `Table 5.5` (`k8s/` manifests)<br>• [`docs/gateway.md`](docs/gateway.md) |
 | **Chapter 6** | **Experimental Evaluation**<br>• 6.2 Ring Characterization<br>• 6.3 Routing Efficiency (nprobe vs hops/latency)<br>• 6.3.1 Scale validation (100 vnodes)<br>• 6.4 Baseline Latency & Monolithic Floor<br>• 6.5 Dynamic Node Join ($5 \to 6$)<br>• 6.7 Single-Node Failure Tolerance<br>• 6.8.1 Sparse Ring Disaster ($N=5$)<br>• 6.8.2 Dense Hot-Node Disaster ($N=100$)<br>• 6.8.3 Doomed Scenario Worst-Case<br>• 6.8.4 Scale of $c = K/N$ ($N \in \{5, 25, 100, 275\}$)<br>• 6.9 Synthesis & Comprehensive Scorecard | • [`src/benchmarks/containerized/evaluate.py`](src/benchmarks/containerized/evaluate.py)<br>• [`src/benchmarks/containerized/plot.py`](src/benchmarks/containerized/plot.py)<br>• [`src/benchmarks/containerized/plot_c_ladder.py`](src/benchmarks/containerized/plot_c_ladder.py)<br>• `run_all_benchmarks_fullcorpus.sh`<br>• `run_hops_scale_async.sh`<br>• `run_vnode_disaster.sh`<br>• `run_doomed_scenario.sh`<br>• `run_disaster_ladder.sh` | • `Table 6.1` (Experimental protocol)<br>• `Tables 6.2 – 6.12`<br>• `Figures 6.1 – 6.8`<br>• `Table 6.13` (Winner scorecard) |
 | **Chapter 7** | **Conclusions & Future Extensions**<br>• Sentence-BERT embeddings<br>• Distributed Apache Spark training<br>• Deterministic topology spread constraints<br>• Adaptive blue-green retraining | • [`k8s_bluegreen/`](k8s_bluegreen/)<br>• [`src/scripts/queue_producer.py`](src/scripts/queue_producer.py)<br>• [`src/scripts/queue_reader.py`](src/scripts/queue_reader.py) | • Blue-green zero-downtime manifests |
 
@@ -72,6 +91,7 @@ This repository hosts the implementation and experimental evaluation for the dip
 ├── k8s/                                # Kubernetes StatefulSet deployment (Chapter 5.10)
 ├── k8s_bluegreen/                      # Blue-Green adaptive retraining extension (Chapter 7.3)
 ├── docs/                               # Project documentation
+│   ├── gateway.md                      # Interactive Web Gateway & Portal guide (Thesis 5.8)
 │   ├── pipeline.md                     # Four-phase system pipeline & two-level routing
 │   └── scripts.md                      # Comprehensive benchmark runner documentation
 ├── run_all_benchmarks_fullcorpus.sh    # 5-node suite: Sections 6.2, 6.3, 6.4, 6.5, 6.7, 6.8.1
